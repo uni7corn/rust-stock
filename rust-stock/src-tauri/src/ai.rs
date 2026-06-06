@@ -69,6 +69,13 @@ pub fn extract_json(content: &str) -> Result<Value, String> {
     serde_json::from_str(&content[start..=end]).map_err(|e| format!("解析 AI JSON 失败: {e}"))
 }
 
+/// 从回答里抠出第一个 JSON 数组
+pub fn extract_json_array(content: &str) -> Result<Value, String> {
+    let start = content.find('[').ok_or("AI 未返回 JSON 数组")?;
+    let end = content.rfind(']').ok_or("AI 未返回 JSON 数组")?;
+    serde_json::from_str(&content[start..=end]).map_err(|e| format!("解析 AI JSON 数组失败: {e}"))
+}
+
 /// 流式问答：每个增量调一次 on_delta。SSE 分包可能不按行对齐，必须攒 buffer 按行切。
 pub async fn chat_stream(
     cfg: &AiConfig,
@@ -139,6 +146,13 @@ mod tests {
         assert_eq!(c.base_url, "https://api.moonshot.cn/v1"); // 尾部斜杠被去掉
         assert_eq!(c.endpoint(), "https://api.moonshot.cn/v1/chat/completions");
         assert_eq!(c.model, "kimi-k2");
+    }
+
+    #[test]
+    fn test_extract_json_array() {
+        let v = extract_json_array("好的：```json\n[{\"code\":\"sh600519\"},{\"code\":\"sz000001\"}]\n```").unwrap();
+        assert_eq!(v.as_array().unwrap().len(), 2);
+        assert!(extract_json_array("没有数组").is_err());
     }
 
     #[test]
