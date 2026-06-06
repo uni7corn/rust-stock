@@ -7,6 +7,11 @@
 
 ---
 
+## 2026-06-06（第八批：打包修正）
+
+### 修复
+- bundle targets 移除 dmg（Mac 专用，混在 Windows 打包会报错）；Windows 默认出 NSIS 安装包，Mac 打包用 `cargo tauri build --bundles dmg`
+
 ## 2026-06-06（第七批：搜索添加自选）
 
 ### 新增

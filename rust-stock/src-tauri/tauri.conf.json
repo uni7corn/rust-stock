@@ -48,8 +48,7 @@
   "bundle": {
     "active": true,
     "targets": [
-      "nsis",
-      "dmg"
+      "nsis"
     ],
     "icon": [
       "icons/32x32.png",
