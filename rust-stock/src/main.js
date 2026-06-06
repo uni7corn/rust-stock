@@ -10,7 +10,7 @@ import { loadAll, state } from './js/store.js';
 import { invoke } from './js/bridge.js';
 import { initScale } from './js/ui.js';
 import { initNav, onShow, currentPage } from './js/router.js';
-import { renderTicker, renderSentiment, renderHeat, initMarket } from './js/pages/market.js';
+import { renderTicker, renderSentiment, renderHeat, initMarket, loadWatchNews, renderWatchNews } from './js/pages/market.js';
 import { loadNews, renderFeed } from './js/pages/news.js';
 import { renderWatch, initWatch } from './js/pages/watch.js';
 import { initChat } from './js/pages/chat.js';
@@ -44,11 +44,15 @@ function restartTimer() {
   }, state.settings.interval * 1000);
 }
 
-// 快讯独立节奏：60s 一次
+// 快讯独立节奏：60s 一次（快讯页=全量 7×24；行情页=自选股相关）
 setInterval(async () => {
-  await loadNews();
-  if (currentPage() === 'news') renderFeed('feedFull');
-  if (currentPage() === 'market') renderFeed('feed');
+  if (currentPage() === 'news') {
+    await loadNews();
+    renderFeed('feedFull');
+  } else if (currentPage() === 'market') {
+    await loadWatchNews();
+    renderWatchNews();
+  }
 }, 60_000);
 
 // ---------- 启动 ----------
@@ -58,6 +62,7 @@ setInterval(async () => {
 
   onShow('news', () => { renderFeed('feedFull'); loadNews().then(() => renderFeed('feedFull')); });
   onShow('watch', renderWatch);
+  onShow('market', () => { renderWatchNews(); loadWatchNews().then(renderWatchNews); });
 
   initNav();
   initWindowControls();
@@ -73,7 +78,7 @@ setInterval(async () => {
   await renderSentiment(); // 推荐的盘面背景依赖情绪结果
   initRecommend();
   renderRecommend();
-  await loadNews();
-  renderFeed('feed');
+  await loadWatchNews();   // 行情页：自选股相关快讯
+  renderWatchNews();
   restartTimer();
 })();

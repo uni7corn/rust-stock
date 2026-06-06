@@ -16,9 +16,11 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewsItem {
-    pub time: String,  // HH:MM
-    pub txt: String,   // 标题/摘要
-    pub tag: String,   // 栏目标签（可空）
+    pub time: String,           // HH:MM
+    pub txt: String,            // 标题/摘要
+    pub tag: String,            // 栏目标签（可空）
+    #[serde(default)]
+    pub stocks: Vec<String>,    // 关联标的 secid（东财 stockList，如 "1.601186"）
 }
 
 /// 解析东方财富 7×24 快讯 JSON
@@ -59,13 +61,54 @@ pub fn parse_em_news(body: &str) -> Vec<NewsItem> {
                 .unwrap_or_else(|| {
                     if item["titleColor"].as_i64().unwrap_or(0) == 3 { "要闻".into() } else { String::new() }
                 });
-            Some(NewsItem { time, txt, tag })
+            let stocks = item["stockList"]
+                .as_array()
+                .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .unwrap_or_default();
+            Some(NewsItem { time, txt, tag, stocks })
         })
+        .collect()
+}
+
+/// 按自选股过滤：快讯的 stockList 命中 secid，或正文包含股票名
+pub fn filter_for_stocks(items: Vec<NewsItem>, secids: &[String], names: &[String]) -> Vec<NewsItem> {
+    items
+        .into_iter()
+        .filter(|n| {
+            n.stocks.iter().any(|s| secids.iter().any(|x| x == s))
+                || names.iter().any(|name| !name.is_empty() && n.txt.contains(name.as_str()))
+        })
+        .take(20)
         .collect()
 }
 
 #[cfg(feature = "net")]
 pub async fn fetch_news() -> Result<Vec<NewsItem>, String> {
+    fetch_news_n(20).await
+}
+
+/// 自选股相关快讯：拉近 200 条 7×24，按 secid/股票名过滤
+#[cfg(feature = "net")]
+pub async fn fetch_stock_news(codes: &[String]) -> Result<Vec<NewsItem>, String> {
+    if codes.is_empty() {
+        return Ok(vec![]);
+    }
+    // 行情拿名称（同时校验代码有效），失败不阻塞——退化为只按 secid 匹配
+    let names: Vec<String> = match crate::sources::get("eastmoney") {
+        Some(src) => src
+            .fetch(codes)
+            .await
+            .map(|qs| qs.into_iter().map(|q| q.name).collect())
+            .unwrap_or_default(),
+        None => vec![],
+    };
+    let secids: Vec<String> = codes.iter().filter_map(|c| crate::sources::to_secid(c)).collect();
+    let all = fetch_news_n(200).await?;
+    Ok(filter_for_stocks(all, &secids, &names))
+}
+
+#[cfg(feature = "net")]
+async fn fetch_news_n(page_size: u32) -> Result<Vec<NewsItem>, String> {
     // 实测（2026-06-06）：sortEnd 不能为空串、req_trace（毫秒时间戳）必填，缺一个都返回
     // {"code":0,"message":"Required String parameter 'xxx' is not present","data":null}
     let ts = std::time::SystemTime::now()
@@ -73,7 +116,7 @@ pub async fn fetch_news() -> Result<Vec<NewsItem>, String> {
         .map(|d| d.as_millis())
         .unwrap_or(0);
     let url = format!(
-        "https://np-weblist.eastmoney.com/comm/web/getFastNewsList?client=web&biz=web_724&fastColumn=102&sortEnd=0&pageSize=20&req_trace={ts}"
+        "https://np-weblist.eastmoney.com/comm/web/getFastNewsList?client=web&biz=web_724&fastColumn=102&sortEnd=0&pageSize={page_size}&req_trace={ts}"
     );
     let resp = reqwest::Client::new()
         .get(&url)
@@ -175,7 +218,30 @@ mod tests {
         assert_eq!(items[0].txt, "伊朗外长说沟通渠道仍畅通");
         assert_eq!(items[0].tag, ""); // 普通条目无标签
         assert_eq!(items[1].tag, "要闻"); // titleColor==3 标红
+        assert_eq!(items[1].stocks, vec!["90.BK0451".to_string()]); // 关联标的被捕获
+        assert!(items[0].stocks.is_empty());
         assert_eq!(items[2].txt, "title空时回退summary");
+    }
+
+    #[test]
+    fn test_filter_for_stocks() {
+        let mk = |txt: &str, stocks: Vec<&str>| NewsItem {
+            time: "10:00".into(),
+            txt: txt.into(),
+            tag: String::new(),
+            stocks: stocks.into_iter().map(|s| s.to_string()).collect(),
+        };
+        let items = vec![
+            mk("某公司中标大单", vec!["1.601186"]),         // secid 命中
+            mk("贵州茅台渠道调研纪要", vec![]),              // 名称命中
+            mk("无关的宏观新闻", vec!["0.000002"]),          // 都不命中
+        ];
+        let secids = vec!["1.601186".to_string()];
+        let names = vec!["贵州茅台".to_string()];
+        let out = filter_for_stocks(items, &secids, &names);
+        assert_eq!(out.len(), 2);
+        assert!(out[0].txt.contains("中标"));
+        assert!(out[1].txt.contains("茅台"));
     }
 
     #[test]

@@ -48,6 +48,12 @@ async fn fetch_sentiment() -> Result<feed::Sentiment, String> {
     feed::fetch_sentiment().await
 }
 
+/// 自选股相关快讯（行情页"自选股信息"卡片）
+#[tauri::command]
+async fn fetch_stock_news(codes: Vec<String>) -> Result<Vec<feed::NewsItem>, String> {
+    feed::fetch_stock_news(&codes).await
+}
+
 /// 历史K线。period: "day" | "week" | "month"
 #[tauri::command]
 async fn fetch_kline(code: String, period: String, count: u32) -> Result<Vec<kline::Candle>, String> {
@@ -517,6 +523,7 @@ pub fn run() {
             fetch_quotes,
             list_sources,
             fetch_news,
+            fetch_stock_news,
             fetch_sentiment,
             fetch_kline,
             ai_recommend,

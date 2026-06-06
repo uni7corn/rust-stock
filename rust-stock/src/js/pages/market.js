@@ -1,6 +1,6 @@
 // pages/market.js — 行情页：指数滚动条、市场情绪表盘（可翻面）、板块热力
-import { INDEX_CODES, fetchQuotes, fetchSentiment, explainSentiment } from '../api.js';
-import { today, aiReady } from '../store.js';
+import { INDEX_CODES, fetchQuotes, fetchSentiment, explainSentiment, fetchStockNews } from '../api.js';
+import { state, today, aiReady } from '../store.js';
 import { nowHMS, flashHint } from '../ui.js';
 import { inTauri } from '../bridge.js';
 
@@ -134,6 +134,45 @@ async function openSentWhy() {
   } catch (e) {
     txtEl.textContent = base + '\n\nAI 解读失败：' + e;
   }
+}
+
+// ---------- 自选股信息：抓取与自选相关的最新快讯 ----------
+const mockWatchNews = [
+  { time: '11:40', txt: '（预览示例）贵州茅台获机构密集调研，渠道反馈动销回暖', tag: '', stocks: [] },
+  { time: '10:36', txt: '（预览示例）宁德时代中标海外大型储能项目', tag: '要闻', stocks: [] },
+];
+let watchNews = null;
+
+export async function loadWatchNews() {
+  if (!inTauri) { watchNews = mockWatchNews; return; }
+  if (!state.watchlist.length) { watchNews = []; return; }
+  const items = await fetchStockNews(state.watchlist);
+  if (items !== null) watchNews = items;
+}
+
+export function renderWatchNews() {
+  const el = document.getElementById('feed');
+  const meta = document.getElementById('watchNewsMeta');
+  if (inTauri && !state.watchlist.length) {
+    el.innerHTML = '<div class="rec-empty">添加自选股后，这里展示与它们相关的最新快讯</div>';
+    meta.textContent = '相关快讯';
+    return;
+  }
+  const list = (watchNews || []).slice(0, 6);
+  if (!list.length) {
+    el.innerHTML = '<div class="rec-empty">暂无自选股相关快讯（近 200 条 7×24 中未提及）<br/>全部快讯见底部「快讯」</div>';
+    meta.textContent = '相关快讯';
+    return;
+  }
+  meta.textContent = `相关 ${list.length} 条`;
+  el.innerHTML = list.map(n => `
+    <div class="feed-item">
+      <span class="feed-time">${n.time}</span>
+      <div class="feed-body">
+        <div class="feed-txt">${n.txt}</div>
+        ${n.tag ? `<div class="feed-tags"><span class="tag bull">${n.tag}</span></div>` : ''}
+      </div>
+    </div>`).join('');
 }
 
 export function initMarket() {

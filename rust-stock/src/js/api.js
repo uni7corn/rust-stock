@@ -41,6 +41,14 @@ export async function fetchKline(code, period, count) {
   } catch (e) { console.warn('K线获取失败:', e); return null; }
 }
 
+export async function fetchStockNews(codes) {
+  if (!inTauri) return null;
+  try {
+    const items = await invoke('fetch_stock_news', { codes });
+    return Array.isArray(items) ? items : null;
+  } catch (e) { console.warn('自选股快讯失败:', e); return null; }
+}
+
 export async function fetchSentiment() {
   if (!inTauri) return null;
   try { return await invoke('fetch_sentiment'); }
