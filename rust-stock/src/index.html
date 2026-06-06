@@ -152,6 +152,8 @@
     font-family: 'DM Mono', monospace;
     font-size: 22px; font-weight: 500;
     letter-spacing: -.5px;
+    /* 底光把穿过数字的指针线压暗，负号不会被白线吃掉 */
+    text-shadow: 0 0 8px var(--bg), 0 0 5px var(--bg), 0 0 3px var(--bg);
   }
   .gauge-label { font-size: 10px; color: var(--txt-3); margin-top: 2px; }
   .gauge-tag {
@@ -372,6 +374,56 @@
   .why-row .c { font-family: 'DM Mono', monospace; }
   .why-row .w { color: var(--txt-3); font-size: 9.5px; font-family: 'DM Mono', monospace; width: 42px; text-align: right; }
 
+  /* 今日 AI 推荐 */
+  .rec-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 2px;
+    border-bottom: 1px solid var(--line-soft);
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background .15s;
+  }
+  .rec-row:last-child { border-bottom: none; }
+  .rec-row:hover { background: var(--surface-2); }
+  .rec-row .r-rank {
+    width: 18px; height: 18px; flex-shrink: 0;
+    border-radius: 6px; background: var(--surface-3);
+    display: grid; place-items: center;
+    font-size: 10px; font-family: 'DM Mono', monospace; color: var(--txt-2);
+  }
+  .rec-row .r-name { flex: 1; min-width: 0; }
+  .rec-row .r-name b { font-size: 12px; display: block; }
+  .rec-row .r-name b .star { color: var(--warn); }
+  .rec-row .r-name i { font-style: normal; font-size: 9.5px; color: var(--txt-3); font-family: 'DM Mono', monospace; }
+  .rec-row .r-name .r-streak { font-size: 9px; color: var(--warn); margin-left: 6px; }
+  .rec-row .r-score { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; flex-shrink: 0; }
+  .rec-empty { font-size: 11px; color: var(--txt-3); text-align: center; padding: 12px 0 4px; }
+  .rec-refresh {
+    border: none; background: transparent; color: var(--txt-3);
+    font-size: 10px; cursor: pointer; font-family: 'Sora', sans-serif;
+    margin-left: 8px; padding: 2px 6px; border-radius: 5px;
+  }
+  .rec-refresh:hover { color: var(--accent); background: var(--surface-3); }
+
+  /* K线页 */
+  .kline-periods { display: flex; gap: 6px; margin-bottom: 10px; }
+  .kp-btn {
+    flex: 1; height: 26px;
+    border: 1px solid var(--line); background: var(--surface-2);
+    color: var(--txt-2); border-radius: 7px;
+    font-size: 11px; font-family: 'Sora', sans-serif; cursor: pointer;
+    transition: all .15s;
+  }
+  .kp-btn.active { color: #fff; background: var(--accent); border-color: var(--accent); }
+  #klineCanvas { width: 100%; border-radius: 9px; background: var(--surface-2); display: block; }
+  .kline-info {
+    display: flex; gap: 10px; flex-wrap: wrap;
+    font-size: 10px; color: var(--txt-2);
+    font-family: 'DM Mono', monospace;
+    margin-top: 8px;
+  }
+  .kline-info b { font-weight: 500; }
+
   /* AI 聊天 */
   .chat-log { display: flex; flex-direction: column; gap: 8px; min-height: 120px; }
   .msg {
@@ -414,7 +466,7 @@
         <button class="win-btn" id="pinBtn" title="置顶">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4v6l-2 4h10l-2-4V4"/><path d="M12 14v6"/><path d="M8 4h8"/></svg>
         </button>
-        <button class="win-btn" id="minBtn" title="最小化">
+        <button class="win-btn" id="minBtn" title="缩为底部滚动横幅">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg>
         </button>
         <button class="win-btn close" id="closeBtn" title="收起到边缘">
@@ -485,6 +537,18 @@
         </div>
       </div>
 
+      <!-- 今日 AI 推荐 -->
+      <div class="card fade-in" style="animation-delay:.03s">
+        <div class="card-head">
+          <div class="bar" style="background:#7b5cff"></div>
+          <h2>今日 AI 推荐</h2>
+          <button class="rec-refresh" id="recRefresh" title="重新生成">↻ 重新生成</button>
+          <div class="meta" id="recMeta"></div>
+        </div>
+        <div id="recList"></div>
+        <div class="set-note" id="recNote" style="margin-top:4px"></div>
+      </div>
+
       <!-- 板块热力 -->
       <div class="card fade-in" style="animation-delay:.05s">
         <div class="card-head">
@@ -515,72 +579,4 @@
             <h2>财联社电报</h2>
             <div class="meta" id="newsMeta">--:--:--</div>
           </div>
-          <div class="feed" id="feedFull"></div>
-        </div>
-      </div>
-
-      <!-- ===== 页面：自选 ===== -->
-      <div class="page" id="page-watch">
-        <div class="card">
-          <div class="card-head">
-            <div class="bar"></div>
-            <h2>自选股</h2>
-            <div class="meta" id="watchMeta"></div>
-          </div>
-          <div class="watch-add">
-            <input class="w-input" id="watchInput" placeholder="代码，如 600519 / sh600519" />
-            <button class="w-btn" id="watchAddBtn">添加</button>
-          </div>
-          <div id="watchList"></div>
-          <div class="watch-empty" id="watchEmpty">暂无自选，先加一支试试</div>
-        </div>
-      </div>
-
-      <!-- ===== 页面：设置 ===== -->
-      <div class="page" id="page-settings">
-        <div class="card">
-          <div class="card-head">
-            <div class="bar" style="background:#7b5cff"></div>
-            <h2>设置</h2>
-          </div>
-          <div class="set-group">
-            <label>行情数据源</label>
-            <select class="w-input" id="setSource">
-              <option value="sina">新浪财经</option>
-              <option value="eastmoney">东方财富</option>
-            </select>
-          </div>
-          <div class="set-group">
-            <label>行情刷新间隔（秒）</label>
-            <input class="w-input" id="setInterval" type="number" min="3" max="600" />
-          </div>
-          <div class="set-group">
-            <label>DeepSeek API Key</label>
-            <input class="w-input" id="setKey" type="password" placeholder="sk-…" />
-          </div>
-          <button class="w-btn wide" id="setSaveBtn">保存设置</button>
-          <div class="set-note">所有设置只存在本机（localStorage，后续迁 SQLite）。填入 DeepSeek key 后，自选股将由 AI 给出看涨/看跌打分。</div>
-        </div>
-      </div>
-
-      <!-- ===== 页面：AI 聊天（不在导航里，底栏发送后进入） ===== -->
-      <div class="page" id="page-chat">
-        <div class="card">
-          <div class="card-head">
-            <div class="bar" style="background:#7b5cff"></div>
-            <h2>AI 助手</h2>
-            <button class="back-btn" id="chatBack">← 返回</button>
-          </div>
-          <div class="chat-log" id="chatLog">
-            <div class="chat-empty" id="chatEmpty">在下方输入框问我任何股票问题，回答流式逐字出现</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ===== 页面：AI 分析详情（不在导航里，点小表盘进入） ===== -->
-      <div class="page" id="page-analysis">
-        <div class="card sentiment">
-          <div class="card-head">
-            <div class="bar"></div>
-            <h2 id="anaName">--</h2>
-            <button class="back-btn" 
+          <div 

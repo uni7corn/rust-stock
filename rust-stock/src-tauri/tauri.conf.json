@@ -25,6 +25,20 @@
         "center": false,
         "x": 1500,
         "y": 120
+      },
+      {
+        "label": "band",
+        "title": "rust-stock band",
+        "url": "band.html",
+        "visible": false,
+        "width": 600,
+        "height": 34,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "shadow": false
       }
     ],
     "security": {
@@ -33,7 +47,10 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "dmg"],
+    "targets": [
+      "nsis",
+      "dmg"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

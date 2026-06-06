@@ -3,7 +3,8 @@
   "identifier": "default",
   "description": "rust-stock 主窗口权限：窗口拖拽/控制 + invoke 自定义命令",
   "windows": [
-    "main"
+    "main",
+    "band"
   ],
   "permissions": [
     "core:default",

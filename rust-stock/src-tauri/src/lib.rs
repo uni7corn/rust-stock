@@ -244,6 +244,37 @@ fn minimize_window(window: WebviewWindow) {
     let _ = window.minimize();
 }
 
+/// 缩小为屏幕底部的嵌入式滚动横幅：隐藏主窗，band 窗贴工作区底边全宽显示
+#[tauri::command]
+fn show_band(window: WebviewWindow) {
+    let app = window.app_handle();
+    let Some(band) = app.get_webview_window("band") else { return };
+    if let Ok(Some(mon)) = window.current_monitor() {
+        let wa = mon.work_area(); // 工作区 = 屏幕减去任务栏，横幅正好"嵌"在任务栏上沿
+        let scale = mon.scale_factor();
+        let h = (34.0 * scale) as u32;
+        let _ = band.set_size(PhysicalSize::new(wa.size.width, h));
+        let _ = band.set_position(PhysicalPosition::new(
+            wa.position.x,
+            wa.position.y + wa.size.height as i32 - h as i32,
+        ));
+    }
+    let _ = band.show();
+    let _ = band.set_always_on_top(true);
+    let _ = window.hide();
+}
+
+/// 从横幅点击还原主窗
+#[tauri::command]
+fn restore_main(window: WebviewWindow) {
+    let app = window.app_handle();
+    if let Some(main) = app.get_webview_window("main") {
+        let _ = main.show();
+        let _ = main.set_focus();
+    }
+    let _ = window.hide(); // band 自己藏起来
+}
+
 /// 吸附到最近的屏幕边缘 / 展开
 #[tauri::command]
 fn toggle_dock_edge(window: WebviewWindow) {
@@ -357,6 +388,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             set_always_on_top,
             minimize_window,
+            show_band,
+            restore_main,
             ask_ai,
             analyze_stock,
             explain_sentiment,

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>rust-stock band</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; }
+  .band {
+    width: 100%; height: 100%;
+    background: rgba(10, 12, 16, .93);
+    border-top: 1px solid #242a36;
+    display: flex; align-items: center;
+    overflow: hidden;
+    cursor: pointer;
+    font-family: 'Sora', system-ui, sans-serif;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 20px, #000 calc(100% - 20px), transparent);
+  }
+  .logo {
+    flex-shrink: 0;
+    width: 20px; height: 20px; border-radius: 6px;
+    margin: 0 10px;
+    background: linear-gradient(135deg, #4d8dff, #7b5cff);
+    display: grid; place-items: center;
+    color: #fff; font-size: 11px; font-weight: 700;
+  }
+  .track-wrap { flex: 1; overflow: hidden; height: 100%; display: flex; align-items: center; }
+  .track {
+    display: flex; gap: 26px;
+    white-space: nowrap;
+    padding-left: 8px;
+    animation: scroll 28s linear infinite;
+  }
+  .band:hover .track { animation-play-state: paused; }
+  @keyframes scroll { to { transform: translateX(-50%); } }
+  .it { display: inline-flex; align-items: baseline; gap: 6px; font-size: 12px; }
+  .it .n { color: #9aa4b2; }
+  .it .v { font-family: 'DM Mono', Consolas, monospace; font-weight: 500; }
+  .it .c { font-family: 'DM Mono', Consolas, monospace; font-size: 11px; }
+  .up { color: #ff4d4f; }
+  .down { color: #14c87d; }
+  .hint { color: #5c6470; font-size: 12px; padding-left: 8px; }
+</style>
+</head>
+<body>
+  <div class="band" id="band" title="点击返回 rust-stock 主窗口">
+    <div class="logo">R</div>
+    <div class="track-wrap"><div class="track" id="track"><span class="hint">加载自选股…</span></div></div>
+  </div>
+  <script type="module" src="./js/band.js"></script>
+</body>
+</html>
