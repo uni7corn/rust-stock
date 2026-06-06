@@ -73,10 +73,7 @@
     font-size: 12px; font-weight: 700; color: #fff;
     box-shadow: 0 2px 10px rgba(77,141,255,.35);
   }
-  .titlebar h1 {
-    font-size: 13px; font-weight: 600; letter-spacing: .2px;
-    flex: 1;
-  }
+  .titlebar h1 { font-size: 13px; font-weight: 600; letter-spacing: .2px; flex: 1; }
   .titlebar h1 span { color: var(--txt-3); font-weight: 400; font-size: 11px; }
   .win-btns { display: flex; gap: 4px; -webkit-app-region: no-drag; }
   .win-btn {
@@ -136,10 +133,7 @@
     border-radius: var(--radius);
     padding: 14px;
   }
-  .card-head {
-    display: flex; align-items: center; gap: 7px;
-    margin-bottom: 12px;
-  }
+  .card-head { display: flex; align-items: center; gap: 7px; margin-bottom: 12px; }
   .card-head .bar { width: 3px; height: 13px; border-radius: 2px; background: var(--accent); }
   .card-head h2 { font-size: 12.5px; font-weight: 600; letter-spacing: .3px; }
   .card-head .meta { margin-left: auto; font-size: 10px; color: var(--txt-3); font-family: 'DM Mono', monospace; }
@@ -163,11 +157,7 @@
   }
 
   /* ---------- 板块热力 ---------- */
-  .heat-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-  }
+  .heat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .heat-cell {
     border-radius: var(--radius-sm);
     padding: 10px 9px;
@@ -237,10 +227,7 @@
   .send-btn:hover { transform: scale(1.06); box-shadow: 0 4px 14px rgba(77,141,255,.4); }
   .send-btn svg { width: 16px; height: 16px; }
 
-  .nav {
-    display: flex;
-    padding: 4px 8px 8px;
-  }
+  .nav { display: flex; padding: 4px 8px 8px; }
   .nav-item {
     flex: 1;
     display: flex; flex-direction: column; align-items: center; gap: 3px;
@@ -255,7 +242,7 @@
   .nav-item.active { color: var(--accent); }
   .nav-item:hover:not(.active) { color: var(--txt-2); }
 
-  /* 边缘吸附时的收起小条（默认隐藏，由 JS/Tauri 控制） */
+  /* 边缘吸附时的收起小条（默认隐藏，由 Tauri 控制） */
   .edge-tab {
     display: none;
     position: absolute; top: 50%; transform: translateY(-50%);
@@ -297,6 +284,7 @@
     display: flex; align-items: center; gap: 8px;
     padding: 10px 2px;
     border-bottom: 1px solid var(--line-soft);
+    cursor: pointer;
   }
   .watch-row:last-child { border-bottom: none; }
   .watch-row .w-name { flex: 1; min-width: 0; }
@@ -563,8 +551,8 @@
       <div class="card fade-in" style="animation-delay:.1s">
         <div class="card-head">
           <div class="bar" style="background:var(--warn)"></div>
-          <h2>财联社电报</h2>
-          <div class="meta">11:49:48</div>
+          <h2>7×24 快讯</h2>
+          <div class="meta">东方财富</div>
         </div>
         <div class="feed" id="feed"></div>
       </div>
@@ -576,7 +564,166 @@
         <div class="card">
           <div class="card-head">
             <div class="bar" style="background:var(--warn)"></div>
-            <h2>财联社电报</h2>
+            <h2>7×24 快讯</h2>
             <div class="meta" id="newsMeta">--:--:--</div>
           </div>
-          <div 
+          <div class="feed" id="feedFull"></div>
+        </div>
+      </div>
+
+      <!-- ===== 页面：自选 ===== -->
+      <div class="page" id="page-watch">
+        <div class="card">
+          <div class="card-head">
+            <div class="bar"></div>
+            <h2>自选股</h2>
+            <div class="meta" id="watchMeta"></div>
+          </div>
+          <div class="watch-add">
+            <input class="w-input" id="watchInput" placeholder="代码，如 600519 / sh600519" />
+            <button class="w-btn" id="watchAddBtn">添加</button>
+          </div>
+          <div id="watchList"></div>
+          <div class="watch-empty" id="watchEmpty">暂无自选，先加一支试试。点名称看K线，点小表盘看AI分析</div>
+        </div>
+      </div>
+
+      <!-- ===== 页面：设置 ===== -->
+      <div class="page" id="page-settings">
+        <div class="card">
+          <div class="card-head">
+            <div class="bar" style="background:#7b5cff"></div>
+            <h2>设置</h2>
+          </div>
+          <div class="set-group">
+            <label>行情数据源</label>
+            <select class="w-input" id="setSource">
+              <option value="sina">新浪财经</option>
+              <option value="eastmoney">东方财富</option>
+            </select>
+          </div>
+          <div class="set-group">
+            <label>行情刷新间隔（秒）</label>
+            <input class="w-input" id="setInterval" type="number" min="3" max="600" />
+          </div>
+          <div class="set-group">
+            <label>AI API Key（默认 DeepSeek）</label>
+            <input class="w-input" id="setKey" type="password" placeholder="sk-…" />
+          </div>
+          <div class="set-group">
+            <label>AI Base URL（留空 = api.deepseek.com，可填任意 OpenAI 兼容服务）</label>
+            <input class="w-input" id="setAiBase" placeholder="https://api.deepseek.com" />
+          </div>
+          <div class="set-group">
+            <label>AI 模型（留空 = deepseek-chat）</label>
+            <input class="w-input" id="setAiModel" placeholder="deepseek-chat" />
+          </div>
+          <div class="set-group">
+            <label>开机自启动</label>
+            <button class="w-btn wide" id="autostartBtn" style="background:var(--surface-3);color:var(--txt-2)">检测中…</button>
+          </div>
+          <button class="w-btn wide" id="setSaveBtn">保存设置</button>
+          <div class="set-note">所有设置只存本机 SQLite。填入 key 后启用：自选股 AI 打分、情绪 AI 解读、今日推荐、AI 聊天。Base URL/模型可切换任意 OpenAI 兼容服务（Kimi、通义、本地 Ollama 等）。</div>
+        </div>
+      </div>
+
+      <!-- ===== 页面：K线（不在导航里，自选股点名称进入） ===== -->
+      <div class="page" id="page-kline">
+        <div class="card">
+          <div class="card-head">
+            <div class="bar" style="background:var(--up)"></div>
+            <h2 id="klineName">--</h2>
+            <button class="back-btn" id="klineBack">← 返回</button>
+          </div>
+          <div class="kline-periods">
+            <button class="kp-btn active" data-p="day">日K</button>
+            <button class="kp-btn" data-p="week">周K</button>
+            <button class="kp-btn" data-p="month">月K</button>
+          </div>
+          <canvas id="klineCanvas" width="672" height="460"></canvas>
+          <div class="kline-info" id="klineInfo"></div>
+          <div class="set-note" id="klineMeta"></div>
+        </div>
+      </div>
+
+      <!-- ===== 页面：AI 聊天（不在导航里，底栏发送后进入） ===== -->
+      <div class="page" id="page-chat">
+        <div class="card">
+          <div class="card-head">
+            <div class="bar" style="background:#7b5cff"></div>
+            <h2>AI 助手</h2>
+            <button class="back-btn" id="chatBack">← 返回</button>
+          </div>
+          <div class="chat-log" id="chatLog">
+            <div class="chat-empty" id="chatEmpty">在下方输入框问我任何股票问题，回答流式逐字出现</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 页面：AI 分析详情（不在导航里，点小表盘/推荐进入） ===== -->
+      <div class="page" id="page-analysis">
+        <div class="card sentiment">
+          <div class="card-head">
+            <div class="bar"></div>
+            <h2 id="anaName">--</h2>
+            <button class="back-btn" id="anaBack">← 返回</button>
+          </div>
+          <div class="gauge-wrap">
+            <svg viewBox="0 0 200 120" width="200" height="120">
+              <defs>
+                <linearGradient id="gg2" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stop-color="#14c87d"/>
+                  <stop offset="0.5" stop-color="#f5a623"/>
+                  <stop offset="1" stop-color="#ff4d4f"/>
+                </linearGradient>
+              </defs>
+              <path d="M14 100 A86 86 0 0 1 186 100" fill="none" stroke="#1f2430" stroke-width="11" stroke-linecap="round"/>
+              <path d="M14 100 A86 86 0 0 1 186 100" fill="none" stroke="url(#gg2)" stroke-width="11" stroke-linecap="round" opacity=".9"/>
+              <g id="anaNeedle" transform="rotate(0 100 100)">
+                <path d="M100 100 L100 28" stroke="#e8ecf2" stroke-width="2.5" stroke-linecap="round"/>
+                <circle cx="100" cy="100" r="5" fill="#e8ecf2"/>
+              </g>
+            </svg>
+            <div class="gauge-val" id="anaScore">0</div>
+          </div>
+          <div class="gauge-label">AI 综合判断 · 看跌 ←→ 看涨（-100 ~ +100）</div>
+          <div class="ana-txt" id="anaTxt"></div>
+          <div class="set-note" id="anaMeta">AI 分析仅供参考，不构成投资建议。</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 底部 dock -->
+    <div class="dock">
+      <div class="ai-bar">
+        <input class="ai-input" id="aiInput" placeholder="问问 AI 助手…" />
+        <button class="send-btn" id="sendBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+        </button>
+      </div>
+      <div class="nav">
+        <button class="nav-item active" data-page="market">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+          行情
+        </button>
+        <button class="nav-item" data-page="news">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v6"/><path d="M9 7h6M9 11h6M9 15h3"/><circle cx="18" cy="18" r="3"/></svg>
+          快讯
+        </button>
+        <button class="nav-item" data-page="watch">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/></svg>
+          自选
+        </button>
+        <button class="nav-item" data-page="settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+          设置
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

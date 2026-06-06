@@ -43,3 +43,14 @@ jobs:
             node --input-type=module --check < "$f"
             echo "ok: $f"
           done
+
+      # 防截断守卫：每个 HTML 必须有结束标签和（主页面）script 入口。
+      # 此前 index.html 曾被同步问题截断且随提交进了仓库，UI 整体瘫痪却无任何报错。
+      - name: Check HTML completeness
+        run: |
+          set -e
+          for f in $(find rust-stock/src -name "*.html"); do
+            grep -q '</html>' "$f" || { echo "TRUNCATED: $f (缺 </html>)"; exit 1; }
+            grep -q '<script type="module"' "$f" || { echo "NO SCRIPT: $f"; exit 1; }
+            echo "ok: $f"
+          done
