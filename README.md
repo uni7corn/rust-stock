@@ -110,7 +110,7 @@ rust-stock/
 
 每次更新的内容见 **[更新日志 CHANGELOG.md](CHANGELOG.md)**。
 
-更多细节：[开发文档](rust-stock/docs/DEVELOPMENT.md) · [项目记忆](rust-stock/docs/MEMORY.md) · [避坑记录](rust-stock/docs/PITFALLS.md)
+更多细节：[开发文档](rust-stock/docs/DEVELOPMENT.md)
 
 ## Roadmap
 

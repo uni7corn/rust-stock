@@ -27,8 +27,8 @@
 rust-stock/
 ├── docs/                      # 文档（开发/记忆/避坑）
 │   ├── DEVELOPMENT.md         # 本文件
-│   ├── MEMORY.md              # 项目记忆：决策、状态、待办
-│   └── PITFALLS.md            # 避坑文档
+│   ├── MEMORY.md              # 项目记忆（本地工作文档，不入库）
+│   └── PITFALLS.md            # 避坑文档（本地工作文档，不入库）
 ├── src/                       # 前端（WebView 加载的内容）
 │   ├── index.html             # 悬浮窗 UI（全部样式内联在 <style>）
 │   └── main.js                # 数据渲染 + Tauri 桥接 + mock 回退

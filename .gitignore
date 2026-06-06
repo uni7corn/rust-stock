@@ -14,3 +14,7 @@ desktop.ini
 # 编辑器
 .vscode/
 .idea/
+
+# 本地工作文档（开发者要求：永不同步到 GitHub）
+MEMORY.md
+PITFALLS.md
