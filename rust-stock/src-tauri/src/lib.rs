@@ -29,6 +29,16 @@ fn list_sources() -> Vec<sources::SourceInfo> {
     sources::list()
 }
 
+/// 股票搜索（名称/代码/拼音首字母），自选页添加用
+#[tauri::command]
+async fn search_stocks(keyword: String) -> Result<Vec<sources::SearchHit>, String> {
+    let kw = keyword.trim();
+    if kw.is_empty() {
+        return Ok(vec![]);
+    }
+    sources::search_stocks(kw).await
+}
+
 /// 抓取行情。codes 用统一格式（sh600519 / int_dji），各源内部转换
 #[tauri::command]
 async fn fetch_quotes(source: String, codes: Vec<String>) -> Result<Vec<Quote>, String> {
@@ -521,6 +531,7 @@ pub fn run() {
             explain_sentiment,
             toggle_dock_edge,
             fetch_quotes,
+            search_stocks,
             list_sources,
             fetch_news,
             fetch_stock_news,

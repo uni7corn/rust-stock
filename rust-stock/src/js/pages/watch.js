@@ -1,6 +1,6 @@
 // pages/watch.js — 自选股：增删、行情刷新、AI 小仪表盘、K线/分析入口
 // 加载策略：缓存先行（立即渲染上次行情/占位），网络刷新到达后无感重绘。
-import { fetchQuotes, normalizeCode, analyzeStock } from '../api.js';
+import { fetchQuotes, normalizeCode, analyzeStock, searchStocks } from '../api.js';
 import { state, saveWatch, saveAiCache, storeGet, storeSet, today, aiReady } from '../store.js';
 import { flashHint } from '../ui.js';
 import { currentPage } from '../router.js';
@@ -123,15 +123,80 @@ export async function renderWatch() {
   }
 }
 
-function addWatch() {
-  const input = document.getElementById('watchInput');
-  const code = normalizeCode(input.value);
-  if (!code) { flashHint('代码格式不对，例：600519 或 sh600519'); return; }
+function addByCode(code, name) {
   if (state.watchlist.includes(code)) { flashHint('已在自选里了'); return; }
   state.watchlist.push(code);
+  if (name) lastNames[code] = name;
   saveWatch();
-  input.value = '';
+  document.getElementById('watchInput').value = '';
+  hideSug();
+  flashHint(`已添加：${name || code.toUpperCase()}`);
   renderWatch();
+}
+
+// ---------- 搜索建议（名称/代码/拼音首字母）----------
+const mockHits = [
+  { code: 'sh600519', name: '贵州茅台', market: '沪A' },
+  { code: 'sz300750', name: '宁德时代', market: '深A' },
+  { code: 'sz002594', name: '比亚迪', market: '深A' },
+];
+let sugHits = [];
+let sugTimer = null;
+
+function hideSug() {
+  document.getElementById('watchSug').classList.remove('open');
+  sugHits = [];
+}
+
+function showSug(hits, kw) {
+  const el = document.getElementById('watchSug');
+  sugHits = hits;
+  if (!hits.length) {
+    el.innerHTML = `<div class="sug-empty">没找到「${kw}」相关的A股</div>`;
+  } else {
+    el.innerHTML = hits.map((h, i) => `
+      <div class="sug-item" data-i="${i}">
+        <b>${h.name}</b>
+        <span class="s-mkt">${h.market}</span>
+        <span class="s-code">${h.code.toUpperCase()}</span>
+      </div>`).join('');
+  }
+  el.classList.add('open');
+}
+
+async function doSearch(kw) {
+  if (!inTauri) {
+    showSug(mockHits.filter(h => h.name.includes(kw) || h.code.includes(kw.toLowerCase())), kw);
+    return;
+  }
+  const hits = await searchStocks(kw);
+  // 输入框内容已变化则丢弃过期结果
+  if (document.getElementById('watchInput').value.trim() !== kw) return;
+  showSug(hits || [], kw);
+}
+
+function onInputChange() {
+  const kw = document.getElementById('watchInput').value.trim();
+  clearTimeout(sugTimer);
+  if (kw.length < 2 || /^(sh|sz)?\d{6}$/i.test(kw)) { hideSug(); return; } // 完整代码不必搜
+  sugTimer = setTimeout(() => doSearch(kw), 280);
+}
+
+async function addWatch() {
+  const input = document.getElementById('watchInput');
+  const kw = input.value.trim();
+  if (!kw) return;
+  // 1) 标准代码直接加
+  const code = normalizeCode(kw);
+  if (code) { addByCode(code); return; }
+  // 2) 下拉里已有结果：取第一个
+  if (sugHits.length) { addByCode(sugHits[0].code, sugHits[0].name); return; }
+  // 3) 现搜：唯一命中直接加，多命中弹下拉让用户选
+  if (!inTauri) { flashHint('浏览器预览输入示例：茅台'); doSearch(kw); return; }
+  const hits = await searchStocks(kw);
+  if (!hits || !hits.length) { flashHint(`没找到「${kw}」相关的A股`); return; }
+  if (hits.length === 1) { addByCode(hits[0].code, hits[0].name); return; }
+  showSug(hits, kw);
 }
 
 // 点击小表盘 → AI 分析详情页
@@ -154,7 +219,20 @@ function openAnalysis(i) {
 
 export function initWatch() {
   document.getElementById('watchAddBtn').addEventListener('click', addWatch);
-  document.getElementById('watchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addWatch(); });
+  const input = document.getElementById('watchInput');
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') addWatch();
+    if (e.key === 'Escape') hideSug();
+  });
+  input.addEventListener('input', onInputChange);
+  input.addEventListener('blur', () => setTimeout(hideSug, 180)); // 给下拉点击留时间
+  document.getElementById('watchSug').addEventListener('mousedown', (e) => {
+    const item = e.target.closest('.sug-item');
+    if (!item) return;
+    e.preventDefault(); // 防 blur 先触发
+    const h = sugHits[+item.dataset.i];
+    if (h) addByCode(h.code, h.name);
+  });
   document.getElementById('watchList').addEventListener('click', (e) => {
     const gauge = e.target.closest('.w-gauge');
     if (gauge) { openAnalysis(+gauge.dataset.i); return; }

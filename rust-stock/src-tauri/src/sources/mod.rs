@@ -13,7 +13,7 @@
 mod eastmoney;
 mod sina;
 
-pub use eastmoney::{to_secid, EastmoneySource};
+pub use eastmoney::{search as search_stocks, to_secid, EastmoneySource, SearchHit};
 pub use sina::SinaSource;
 
 use crate::quote::Quote;

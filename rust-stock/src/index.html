@@ -281,7 +281,31 @@
   .w-btn:hover { filter: brightness(1.12); }
   .w-btn.wide { width: 100%; margin-top: 2px; }
 
-  .watch-add { display: flex; gap: 8px; margin-bottom: 6px; }
+  .watch-add { display: flex; gap: 8px; margin-bottom: 6px; position: relative; }
+  .sug {
+    display: none;
+    position: absolute; left: 0; right: 0; top: 38px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 10px 26px rgba(0,0,0,.5);
+    z-index: 50;
+    max-height: 196px; overflow-y: auto;
+  }
+  .sug.open { display: block; }
+  .sug-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 12px;
+  }
+  .sug-item:last-child { border-bottom: none; }
+  .sug-item:hover, .sug-item.sel { background: var(--surface-3); }
+  .sug-item b { font-weight: 600; }
+  .sug-item .s-code { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--txt-3); margin-left: auto; }
+  .sug-item .s-mkt { font-size: 9px; color: var(--txt-3); background: var(--surface-3); padding: 1px 6px; border-radius: 4px; }
+  .sug-empty { padding: 10px; font-size: 11px; color: var(--txt-3); text-align: center; }
   .watch-row {
     display: flex; align-items: center; gap: 8px;
     padding: 10px 2px;
@@ -595,8 +619,9 @@
             <div class="meta" id="watchMeta"></div>
           </div>
           <div class="watch-add">
-            <input class="w-input" id="watchInput" placeholder="代码，如 600519 / sh600519" />
+            <input class="w-input" id="watchInput" placeholder="代码 / 名称 / 拼音首字母，如 600519、茅台、GZMT" autocomplete="off" />
             <button class="w-btn" id="watchAddBtn">添加</button>
+            <div class="sug" id="watchSug"></div>
           </div>
           <div id="watchList"></div>
           <div class="watch-empty" id="watchEmpty">暂无自选，先加一支试试。点名称看K线，点小表盘看AI分析</div>
