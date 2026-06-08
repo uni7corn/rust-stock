@@ -41,7 +41,8 @@ impl AiConfig {
 
 /// 一次性问答（非流式），返回 content 文本
 pub async fn chat_once(cfg: &AiConfig, messages: Vec<Value>, temperature: f64) -> Result<String, String> {
-    let body = json!({ "model": cfg.model, "messages": messages, "temperature": temperature });
+    // max_tokens 给足：详尽版推荐 reason（6×250~400字）会撞部分服务的默认输出上限导致 JSON 截断
+    let body = json!({ "model": cfg.model, "messages": messages, "temperature": temperature, "max_tokens": 7000 });
     let resp = reqwest::Client::new()
         .post(cfg.endpoint())
         .header("Authorization", format!("Bearer {}", cfg.key))

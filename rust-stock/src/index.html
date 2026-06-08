@@ -431,6 +431,23 @@
   }
   .rec-refresh:hover { color: var(--accent); background: var(--surface-3); }
   .rec-refresh:disabled { opacity: .55; cursor: default; color: var(--warn); }
+  .perf-sum {
+    font-size: 11px; color: var(--txt-2);
+    padding: 8px 10px; margin-bottom: 6px;
+    background: var(--surface-2); border: 1px solid var(--line-soft);
+    border-radius: var(--radius-sm);
+  }
+  .perf-sum b { font-family: 'DM Mono', monospace; font-weight: 500; }
+  .perf-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 10px; font-size: 11px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .perf-row:last-child { border-bottom: none; margin-bottom: 4px; }
+  .perf-row .p-day { font-family: 'DM Mono', monospace; color: var(--txt-3); font-size: 10px; width: 38px; flex-shrink: 0; }
+  .perf-row .p-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .perf-row .p-score { font-family: 'DM Mono', monospace; color: var(--txt-3); font-size: 10px; }
+  .perf-row .p-ret { font-family: 'DM Mono', monospace; width: 62px; text-align: right; flex-shrink: 0; }
 
   /* K线页 */
   .kline-periods { display: flex; gap: 6px; margin-bottom: 10px; }
@@ -569,9 +586,11 @@
         <div class="card-head">
           <div class="bar" style="background:#7b5cff"></div>
           <h2>今日 AI 推荐</h2>
+          <button class="rec-refresh" id="recPerf" title="历史推荐表现回算">📊 战绩</button>
           <button class="rec-refresh" id="recRefresh" title="重新生成">↻ 重新生成</button>
           <div class="meta" id="recMeta"></div>
         </div>
+        <div id="recPerfPanel" style="display:none"></div>
         <div id="recList"></div>
         <div class="set-note" id="recNote" style="margin-top:4px"></div>
       </div>
@@ -695,7 +714,7 @@
             <button class="back-btn" id="chatBack">← 返回</button>
           </div>
           <div class="chat-log" id="chatLog">
-            <div class="chat-empty" id="chatEmpty">在下方输入框问我任何股票问题，回答流式逐字出现</div>
+            <div class="chat-empty" id="chatEmpty">在下方输入框问我任何股票问题，回答流式逐字出现<br/><br/>输入「<b>深度调研 + 主题</b>」触发产业链八层拆解<br/>例：深度调研 AI算力光模块</div>
           </div>
         </div>
       </div>

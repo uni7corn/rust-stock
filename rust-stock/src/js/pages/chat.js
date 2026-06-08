@@ -37,8 +37,10 @@ async function sendAI() {
   curAiText = '';
   aiBusy = true;
   chatHistory.push({ role: 'user', content: q });
+  // 「深度调研 主题」触发产业链八层拆解工作流（回答更长更慢）
+  const mode = /^(深度)?调研[\s:：]/.test(q) || q.startsWith('深度调研') ? 'research' : null;
   try {
-    await askAi(q, chatHistory.slice(0, -1).slice(-12));
+    await askAi(q, chatHistory.slice(0, -1).slice(-12), mode);
   } catch (e) {
     failAi(String(e));
   }

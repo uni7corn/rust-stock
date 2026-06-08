@@ -1,6 +1,6 @@
 // pages/recommend.js — 今日 AI 推荐：详尽分析后推荐 3 支
 // 历史按日存 SQLite（rec_history），连续 ≥7 个推荐日出现同一支 → ★ 标识并注明天数
-import { aiRecommend } from '../api.js';
+import { aiRecommend, fetchKline } from '../api.js';
 import { state, saveRecHistory, saveWatch, today, aiReady } from '../store.js';
 import { flashHint } from '../ui.js';
 import { inTauri } from '../bridge.js';
@@ -37,7 +37,7 @@ async function generate(force = false, manual = false) {
   // manual=true 是用户点按钮，给出明确反馈；auto 模式保持安静
   if (!inTauri) { if (manual) flashHint('浏览器预览无法调用 AI'); return; }
   if (!aiReady()) { if (manual) flashHint('先在设置页接入 AI API Key'); return; }
-  if (pending) { if (manual) flashHint('AI 正在生成中，约需 30~60 秒，请稍候'); return; }
+  if (pending) { if (manual) flashHint('AI 正在生成中，约需 1~2 分钟（详尽产业链分析），请稍候'); return; }
   const tk = today();
   if (!force && state.recHistory[tk]) return;
   pending = true;
@@ -84,7 +84,7 @@ export function renderRecommend() {
   meta.textContent = recs ? tk : '';
   if (!recs) {
     if (pending) {
-      list.innerHTML = '<div class="rec-empty">⏳ AI 正在详尽分析今日盘面并用实时行情复核，约需 30~60 秒…</div>';
+      list.innerHTML = '<div class="rec-empty">⏳ AI 正在详尽分析今日盘面并用实时行情复核，约需 1~2 分钟（详尽产业链分析）…</div>';
       note.textContent = '';
     } else if (!aiReady()) {
       list.innerHTML = '<div class="rec-empty">接入 AI（设置页）后，每天自动生成 3 支推荐</div>';
@@ -130,7 +130,82 @@ function addToWatch(i) {
   renderRecommend(); // 按钮变 ✓
 }
 
+// ---------- 推荐战绩：用K线回算每次推荐的后续表现 ----------
+let perfCache = null;   // 本次会话算过就复用
+let perfOpen = false;
+let perfBusy = false;
+
+async function computePerf() {
+  const days = Object.keys(state.recHistory).sort().reverse().filter(d => d !== today()).slice(0, 10);
+  const rows = [];
+  for (const d of days) for (const r of (state.recHistory[d] || [])) rows.push({ day: d, code: r.code, name: r.name, score: r.score });
+  if (!rows.length) return { rows: [], winRate: 0, avg: 0 };
+  const codes = [...new Set(rows.map(r => r.code))];
+  const klines = {};
+  await Promise.all(codes.map(async c => { klines[c] = await fetchKline(c, 'day', 60); }));
+  const out = [];
+  for (const r of rows) {
+    const k = klines[r.code];
+    if (!k || !k.length) continue;
+    // 推荐日（或其后第一个交易日）的收盘 → 最新收盘
+    const base = k.find(c => c.date >= r.day);
+    const last = k[k.length - 1];
+    if (!base || !last || base.date === last.date || !base.close) continue;
+    out.push({ ...r, ret: (last.close - base.close) / base.close * 100 });
+  }
+  const wins = out.filter(r => r.ret > 0).length;
+  return {
+    rows: out,
+    winRate: out.length ? wins / out.length * 100 : 0,
+    wins,
+    avg: out.length ? out.reduce((a, r) => a + r.ret, 0) / out.length : 0,
+  };
+}
+
+function renderPerf(p) {
+  const el = document.getElementById('recPerfPanel');
+  if (!p.rows.length) {
+    el.innerHTML = '<div class="rec-empty">还没有可回算的历史推荐（需要往日推荐 + 至少一个交易日）</div>';
+    return;
+  }
+  const sum = `<div class="perf-sum">胜率 <b class="${p.winRate >= 50 ? 'up-c' : 'down-c'}">${p.winRate.toFixed(0)}%</b>（${p.wins}/${p.rows.length}） · 平均 <b class="${p.avg >= 0 ? 'up-c' : 'down-c'}">${p.avg >= 0 ? '+' : ''}${p.avg.toFixed(2)}%</b> · 推荐日收盘 → 最新收盘</div>`;
+  el.innerHTML = sum + p.rows.slice(0, 15).map(r => `
+    <div class="perf-row">
+      <span class="p-day">${r.day.slice(5)}</span>
+      <span class="p-name">${r.name}</span>
+      <span class="p-score">${r.score > 0 ? '+' : ''}${r.score}</span>
+      <span class="p-ret ${r.ret >= 0 ? 'up-c' : 'down-c'}">${r.ret >= 0 ? '+' : ''}${r.ret.toFixed(2)}%</span>
+    </div>`).join('');
+}
+
+async function togglePerf() {
+  const el = document.getElementById('recPerfPanel');
+  perfOpen = !perfOpen;
+  el.style.display = perfOpen ? 'block' : 'none';
+  if (!perfOpen || perfBusy) return;
+  if (perfCache) { renderPerf(perfCache); return; }
+  if (!inTauri) {
+    renderPerf({ rows: [
+      { day: '2026-06-04', name: '贵州茅台', score: 72, ret: 4.12 },
+      { day: '2026-06-04', name: '宁德时代', score: 55, ret: -1.30 },
+      { day: '2026-06-03', name: '中际旭创', score: 64, ret: 7.85 },
+    ], winRate: 66.7, wins: 2, avg: 3.56 });
+    return;
+  }
+  perfBusy = true;
+  el.innerHTML = '<div class="rec-empty">⏳ 正在用K线回算历史推荐表现…</div>';
+  try {
+    perfCache = await computePerf();
+    renderPerf(perfCache);
+  } catch (e) {
+    el.innerHTML = '<div class="rec-empty">回算失败：' + e + '</div>';
+  } finally {
+    perfBusy = false;
+  }
+}
+
 export function initRecommend() {
+  document.getElementById('recPerf').addEventListener('click', togglePerf);
   document.getElementById('recList').addEventListener('click', (e) => {
     // 一键加自选（在行点击之前拦截）
     const addBtn = e.target.closest('.rec-add');

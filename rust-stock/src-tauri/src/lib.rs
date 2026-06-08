@@ -93,7 +93,19 @@ fn db_set(db: tauri::State<storage::Db>, key: String, value: String) -> Result<(
 // AI 命令（业务 prompt 在这里，协议细节在 ai.rs）
 // ============================================================
 
+/// 深度调研模式系统 prompt：供应链瓶颈研究法（产业链八层拆解，先排层级再排公司）
+const RESEARCH_SYSTEM: &str = "你是嵌在 rust-stock 里的A股产业链深度调研助手。收到主题后按以下工作流推理：\
+1) 把市场叙事翻译成系统性变化：什么技术/经济变化在驱动需求，哪个物理约束最关键（功耗/带宽/良率/纯度/产能/认证）；\
+2) 拆解产业链八层：下游需求→系统集成→模块子系统→芯片器件→制程封装→设备检测→材料耗材→基础设施；\
+3) 先排层级再排公司：指出哪几层最接近真实扩产约束（稀缺层），理由落在供应商数量、认证周期、扩产难度、工艺壁垒；\
+4) 列每个关键层的代表性A股公司并分类：控制稀缺层/供应稀缺层/受益于主题/仅有故事；\
+5) 给出优先研究清单（3~7家），每家按「卡住的环节/产业链位置（上游是什么、下游卖给谁）/排序原因（需求传导到哪条财务线）/应核实的证据方向（年报、公告、互动易、招投标、环评、客户认证）/主要风险/证伪条件」展开；\
+6) 指出一个市场热捧但你排序靠后的方向并解释为什么；\
+7) 结尾给「下一步核实清单」。\
+规则：你没有实时行情和新闻检索，禁止编造具体价格/市值/涨跌幅/合同金额；结尾必须注明『以上基于模型知识推理，未经实时新闻与公告核验，请按核实清单自行验证』；只做研究排序，不做买卖指令。中文回答，分节清晰。";
+
 /// 流式聊天：逐 delta emit "ai-chunk"，结束 "ai-done"，错误 "ai-error"
+/// mode = "research" 时启用深度调研工作流
 #[tauri::command]
 async fn ask_ai(
     window: WebviewWindow,
@@ -102,16 +114,21 @@ async fn ask_ai(
     model: Option<String>,
     question: String,
     history: Vec<serde_json::Value>,
+    mode: Option<String>,
 ) -> Result<(), String> {
     let cfg = ai::AiConfig::new(key, base_url, model)?;
-    let mut messages = vec![serde_json::json!({
-        "role": "system",
-        "content": "你是嵌在悬浮行情助手 rust-stock 里的股票 AI。回答简洁（手机宽度的窗口），中文，涉及操作建议时务必提示风险、注明仅供参考。"
-    })];
+    let deep = mode.as_deref() == Some("research");
+    let system = if deep {
+        RESEARCH_SYSTEM
+    } else {
+        "你是嵌在悬浮行情助手 rust-stock 里的股票 AI。回答简洁（手机宽度的窗口），中文，涉及操作建议时务必提示风险、注明仅供参考。"
+    };
+    let temperature = if deep { 0.4 } else { 0.6 };
+    let mut messages = vec![serde_json::json!({ "role": "system", "content": system })];
     messages.extend(history);
     messages.push(serde_json::json!({ "role": "user", "content": question }));
 
-    let result = ai::chat_stream(&cfg, messages, 0.6, |delta| {
+    let result = ai::chat_stream(&cfg, messages, temperature, |delta| {
         let _ = window.emit("ai-chunk", delta);
     })
     .await;
@@ -147,10 +164,17 @@ async fn analyze_stock(
 ) -> Result<AiAnalysis, String> {
     let cfg = ai::AiConfig::new(key, base_url, model)?;
     let prompt = format!(
-        "对A股股票「{name}」（代码 {code}，现价 {price:.2}，今日涨跌 {change_pct:+.2}%）\
-         给出短线综合看涨/看跌判断。严格只输出 JSON：\
+        "对A股股票「{name}」（代码 {code}，现价 {price:.2}，今日涨跌 {change_pct:+.2}%——这两个是真实行情数字，可以引用）\
+         做详尽的产业链式多空判断。严格只输出 JSON：\
          {{\"score\": -100到100的整数（越看涨越接近100，越看跌越接近-100，中性为0）, \
-         \"analysis\": \"200字以内的分析理由，说明为什么是这个分数\"}}"
+         \"analysis\": \"300~450字，必须依次覆盖六个小节并用「」标出：\
+         「产业链位置」它在哪条产业链的哪一层，上游供给它什么、下游卖给谁；\
+         「卡点判断」它是控制稀缺环节、供应稀缺环节、还是仅受益于主题——稀缺性的来源（认证周期/扩产难度/工艺壁垒）；\
+         「误分类检验」市场现在把它当什么标签，它可能正在变成什么；\
+         「短线多空」结合给定的真实涨跌幅判断当前位置与情绪；\
+         「验证指标」未来1~4个季度看哪些财报/公告信号能确认或推翻判断；\
+         「证伪条件」出现什么情况说明这个判断错了。\
+         除给定的现价与涨跌幅外，禁止编造其他具体数字。\"}}"
     );
     let messages = vec![
         serde_json::json!({ "role": "system", "content": "你是严谨的股票分析助手。只输出 JSON，不输出任何其他文字。分析仅供参考，不构成投资建议。" }),
@@ -208,20 +232,27 @@ async fn ai_recommend(
 ) -> Result<Vec<RecStock>, String> {
     let cfg = ai::AiConfig::new(key, base_url, model)?;
     let prompt = format!(
-        "{context}。你是严谨的A股分析师。请给出 6 支当前值得【买入关注】的A股候选股票\
+        "{context}。请用供应链瓶颈研究法给出 6 支当前值得【买入关注】的A股候选\
         （系统随后会用真实实时行情复核，自动淘汰当日明显下跌的标的，最终展示前 3 支）。\
+         研究方法：先把主题翻译成系统性变化，拆解产业链上下游（下游需求→系统集成→模块→芯片器件→制程封装→设备检测→材料耗材→基础设施），\
+         找出供给最难扩张的稀缺层（供应商少/认证周期长/扩产难/工艺壁垒高），优先推荐控制或最接近稀缺层的公司，而非单纯蹭主题的公司。\
          硬性要求：\
-         1) 只选看涨标的——看跌、破位、抛压沉重的股票绝不能出现；\
+         1) 只选看涨标的——看跌、破位、抛压沉重的绝不能出现；\
          2) 避开 ST、退市风险股；代码必须真实存在；\
-         3) 你无法获取实时行情，禁止编造具体的当日涨跌幅、现价等数字，\
-            分析基于公司基本面、行业景气度与中期技术格局。\
+         3) 你无法获取实时行情，禁止编造当日涨跌幅、现价、市值、合同金额等数字；\
+         4) 每支 reason 必须详尽（250~400字），依次覆盖六个小节并用「」标出：\
+         「产业链位置」处于哪条链的哪一层，上游是什么、下游卖给谁；\
+         「卡住的环节」控制/供应/受益于哪个稀缺环节，为什么难扩产；\
+         「排序原因」需求传导到它的财务路径（收入/毛利/订单哪一项先动）；\
+         「证据」公开可查的支撑方向（公告/订单/产能/客户认证，不编造具体数字）；\
+         「主要风险」替代技术/竞争扩产/需求不及预期/估值透支中最致命的一条；\
+         「证伪条件」什么情况说明判断错了。\
          严格只输出 JSON 数组，共 6 个元素：\
          [{{\"code\":\"sh600519 或 sz000001 这种格式\",\"name\":\"股票名称\",\
-         \"score\":1到100的整数（看涨信心，越高越看涨，不允许负数）,\
-         \"reason\":\"150~250字的详尽分析：基本面/行业/技术格局依据 + 风险提示\"}}]"
+         \"score\":1到100的整数（看涨信心，不允许负数）,\"reason\":\"…\"}}]"
     );
     let messages = vec![
-        serde_json::json!({ "role": "system", "content": "你是严谨的股票分析助手。只输出 JSON 数组，不输出任何其他文字。推荐仅供参考，不构成投资建议。" }),
+        serde_json::json!({ "role": "system", "content": "你是严谨的A股产业链研究助手，方法论：供应链瓶颈优先，先排层级再排公司。只输出 JSON 数组，不输出任何其他文字。推荐仅供参考，不构成投资建议。" }),
         serde_json::json!({ "role": "user", "content": prompt }),
     ];
     let content = ai::chat_once(&cfg, messages, 0.5).await?;

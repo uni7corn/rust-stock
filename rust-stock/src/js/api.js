@@ -71,7 +71,7 @@ export const analyzeStock = (name, code, price, changePct) =>
   invoke('analyze_stock', { ...aiArgs(), name, code, price, changePct });
 export const explainSentiment = (score, label, detail) =>
   invoke('explain_sentiment', { ...aiArgs(), score, label, detail });
-export const askAi = (question, history) =>
-  invoke('ask_ai', { ...aiArgs(), question, history });
+export const askAi = (question, history, mode) =>
+  invoke('ask_ai', { ...aiArgs(), question, history, mode: mode || null });
 export const aiRecommend = (context) =>
   invoke('ai_recommend', { ...aiArgs(), context });
