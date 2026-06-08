@@ -2,7 +2,7 @@
 // 加载策略：缓存先行（立即渲染上次行情/占位），网络刷新到达后无感重绘。
 import { fetchQuotes, normalizeCode, analyzeStock, searchStocks } from '../api.js';
 import { state, saveWatch, saveAiCache, storeGet, storeSet, today, aiReady } from '../store.js';
-import { flashHint } from '../ui.js';
+import { flashHint, nowHMS } from '../ui.js';
 import { currentPage } from '../router.js';
 import { inTauri } from '../bridge.js';
 import { showAnalysis } from './analysis.js';
@@ -116,6 +116,8 @@ export async function renderWatch() {
       });
       storeSet('watch_quotes_cache', cacheMap); // 持久化，重启后首开也秒出
       paint();
+      const m = document.getElementById('watchMeta');
+      if (m && state.watchlist.length) m.textContent = state.watchlist.length + ' 支 · ' + nowHMS();
       wl.forEach(c => { if (cacheMap[c]) ensureAnalysis(c, cacheMap[c]); });
     }
   } finally {

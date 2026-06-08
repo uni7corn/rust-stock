@@ -63,9 +63,10 @@ let timer = null;
 function restartTimer() {
   clearInterval(timer);
   timer = setInterval(() => {
-    renderTicker();
-    renderSentiment();
-    if (currentPage() === 'watch') renderWatch();
+    const p = currentPage();
+    renderTicker();                 // 顶部指数条所有页可见，始终刷新
+    if (p === 'market') { renderSentiment(); renderHeat(); } // 行情页：情绪+板块实时
+    if (p === 'watch') renderWatch();                        // 自选页：自选价格实时
   }, state.settings.interval * 1000);
 }
 

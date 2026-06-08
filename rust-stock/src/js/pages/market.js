@@ -101,6 +101,7 @@ async function pickSectors() {
 export async function renderHeat() {
   const grid = document.getElementById('heatGrid');
   let data = await pickSectors();
+  const real = !!data;
   if (!data) data = heat; // 回退演示
   grid.innerHTML = data.map(h => {
     const c = heatColor(h.v);
@@ -109,6 +110,8 @@ export async function renderHeat() {
       <span class="h-chg" style="color:${c.fg}">${h.chg}</span>
     </div>`;
   }).join('');
+  const meta = document.getElementById('heatMeta');
+  if (meta) meta.textContent = real ? nowHMS() : '演示数据';
 }
 
 // 点击情绪表盘 → 翻面看"为什么是这个档位"
