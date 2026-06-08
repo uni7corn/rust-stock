@@ -1,8 +1,17 @@
 // ui.js — 通用 UI 工具：等比缩放、提示气泡、时间
+import { isMobile } from './bridge.js';
 const BASE_W = 360;
 const shellEl = document.querySelector('.shell');
 
 export function applyScale() {
+  // 移动端：webview 本身就是手机宽度，自然铺满，不做 transform 缩放
+  // （transform:scale 会破坏 position:fixed、滚动容器和触摸坐标）
+  if (isMobile) {
+    shellEl.style.width = '100%';
+    shellEl.style.height = '100%';
+    shellEl.style.transform = 'none';
+    return;
+  }
   const z = window.innerWidth / BASE_W;
   shellEl.style.width = BASE_W + 'px';
   shellEl.style.height = (window.innerHeight / z) + 'px';

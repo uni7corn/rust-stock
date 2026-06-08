@@ -7,7 +7,7 @@
 //   router.js  页面切换（渲染钩子在本文件注册）
 //   pages/     行情 / 快讯 / 自选 / 聊天 / 设置
 import { loadAll, state, saveSettings } from './js/store.js';
-import { invoke } from './js/bridge.js';
+import { invoke, isMobile } from './js/bridge.js';
 import { initScale } from './js/ui.js';
 import { initNav, onShow, currentPage } from './js/router.js';
 import { renderTicker, renderSentiment, renderHeat, initMarket, loadWatchNews, renderWatchNews } from './js/pages/market.js';
@@ -83,6 +83,7 @@ setInterval(async () => {
 
 // ---------- 启动 ----------
 (async function init() {
+  document.body.classList.toggle('mobile', isMobile);
   initScale();
   await loadAll(); // 先取 SQLite（浏览器回退 localStorage），再首屏渲染
 

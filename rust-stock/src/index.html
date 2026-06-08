@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
 <title>rust-stock</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <style>
@@ -82,6 +82,19 @@
   .win-btn:hover { background: var(--surface-3); color: var(--txt); }
   .win-btn.close:hover { background: rgba(255,77,79,.16); color: var(--up); }
   .win-btn svg { width: 14px; height: 14px; }
+
+  /* ---------- 移动端适配（body.mobile，安卓/iOS）---------- */
+  body.mobile .shell { border-radius: 0; border: none; }
+  body.mobile .win-btns { display: none; }           /* 置顶/最小化/关闭在手机上无意义 */
+  body.mobile .titlebar {
+    height: calc(48px + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);       /* 避开状态栏/刘海 */
+  }
+  body.mobile .nav {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); /* 避开底部手势条 */
+  }
+  body.mobile .nav-item { padding: 8px 0; }           /* 触控热区放大 */
+  body.mobile .nav-item:active { background: var(--surface-3); } /* 触摸反馈 */
 
   /* ---------- 指数滚动条 ---------- */
   .ticker {
