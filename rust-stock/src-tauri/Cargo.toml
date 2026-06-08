@@ -17,7 +17,8 @@ tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # 行情抓取 + AI 流式（stream feature 用于 DeepSeek SSE）
-reqwest = { version = "0.12", features = ["gzip", "stream"] }
+# rustls-tls：纯 Rust TLS，不依赖系统 openssl（安卓交叉编译 openssl-sys 会失败）
+reqwest = { version = "0.12", default-features = false, features = ["gzip", "stream", "rustls-tls", "http2", "charset"] }
 encoding_rs = "0.8"   # 新浪 GBK 转 UTF-8
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 futures-util = "0.3"  # 流式响应 bytes_stream

@@ -127,6 +127,13 @@ rust-stock/
 
 > 倒序排列，最新更新在最上方。每次代码更新都会同步追加到这里。
 
+## 2026-06-08（第二十三批：安卓 TLS 修复——reqwest 切 rustls）
+
+### 修复（安卓交叉编译）
+- 安卓 `cargo tauri android build` 报 `openssl-sys` 找不到系统 OpenSSL（交叉编译无 sysroot openssl）
+- reqwest 从默认 native-tls(openssl) 切换到 **rustls-tls**（纯 Rust TLS，零系统依赖），桌面+安卓通用
+- `default-features = false` + 显式 `gzip/stream/rustls-tls/http2/charset`，行为不变
+
 ## 2026-06-08（第二十二批：安卓端准备——条件编译隔离）
 
 ### 重构（为 Android 铺路）
