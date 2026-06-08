@@ -2,7 +2,7 @@
 // 交互：滚轮缩放（光标锚定）、按住拖动平移、日/周/月切换。自选股点名称进入。
 import { fetchKline, fetchQuotes, fetchFundFlow } from '../api.js';
 import { switchPage } from '../router.js';
-import { inTauri } from '../bridge.js';
+import { inTauri, isMobile } from '../bridge.js';
 
 const cur = { code: null, name: '', period: 'day' };
 let data = [];                      // 全量K线缓存（最多 250 根）
@@ -143,8 +143,9 @@ async function load() {
   data = candles;
   resetView();
   draw();
+  const gesture = isMobile ? '双指缩放 / 单指平移' : '滚轮缩放 / 拖动平移';
   document.getElementById('klineMeta').textContent =
-    `${cur.code.toUpperCase()} · 共 ${data.length} 根 · 前复权 · 滚轮缩放 / 拖动平移` + (mocked ? ' · 预览模拟数据' : ' · 东方财富');
+    `${cur.code.toUpperCase()} · 共 ${data.length} 根 · 前复权 · ${gesture}` + (mocked ? ' · 预览模拟数据' : ' · 东方财富');
 }
 
 // 金额格式化：元 → 亿/万
@@ -252,6 +253,62 @@ export function initKline() {
     if (ns !== view.start) { view.start = ns; draw(); }
   });
   window.addEventListener('mouseup', () => { pan = null; });
+
+  // ---- 触屏手势（移动端）：单指横扫平移、双指捏合缩放；单指竖扫不拦截（留给页面滚动）----
+  let tpan = null;   // {x, y, start, axis:null|'x'|'y'}
+  let pinch = null;  // {dist, fx, idxAtCenter, count}
+  const dist2 = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+
+  cv.addEventListener('touchstart', (e) => {
+    if (!data.length) return;
+    if (e.touches.length === 2) {
+      tpan = null;
+      const [a, b] = e.touches;
+      const rect = cv.getBoundingClientRect();
+      const cx = (a.clientX + b.clientX) / 2;
+      const fx = Math.min(1, Math.max(0, (cx - rect.left) / rect.width));
+      pinch = { dist: dist2(a, b), fx, idxAtCenter: view.start + fx * view.count, count: view.count };
+    } else if (e.touches.length === 1) {
+      pinch = null;
+      tpan = { x: e.touches[0].clientX, y: e.touches[0].clientY, start: view.start, axis: null };
+    }
+  }, { passive: false });
+
+  cv.addEventListener('touchmove', (e) => {
+    if (!data.length) return;
+    const rect = cv.getBoundingClientRect();
+    if (pinch && e.touches.length === 2) {
+      e.preventDefault();
+      const [a, b] = e.touches;
+      const ratio = pinch.dist / Math.max(1, dist2(a, b)); // 张开→ratio<1→count减小→放大
+      let nc = Math.round(pinch.count * ratio);
+      nc = Math.max(20, Math.min(data.length, nc));
+      let ns = Math.round(pinch.idxAtCenter - pinch.fx * nc);
+      ns = Math.max(0, Math.min(data.length - nc, ns));
+      view = { start: ns, count: nc };
+      draw();
+    } else if (tpan && e.touches.length === 1) {
+      const tx = e.touches[0].clientX, ty = e.touches[0].clientY;
+      if (tpan.axis === null) {
+        const dx = Math.abs(tx - tpan.x), dy = Math.abs(ty - tpan.y);
+        if (dx < 6 && dy < 6) return;        // 太小，先不判定方向
+        tpan.axis = dx > dy ? 'x' : 'y';
+      }
+      if (tpan.axis === 'y') return;          // 竖扫：交给页面滚动
+      e.preventDefault();                     // 横扫：平移K线
+      const dIdx = Math.round((tpan.x - tx) / rect.width * view.count);
+      const ns = Math.max(0, Math.min(data.length - view.count, tpan.start + dIdx));
+      if (ns !== view.start) { view.start = ns; draw(); }
+    }
+  }, { passive: false });
+
+  cv.addEventListener('touchend', (e) => {
+    if (e.touches.length === 0) { tpan = null; pinch = null; }
+    else if (e.touches.length === 1) {       // 双指退到单指：重置平移基准
+      pinch = null;
+      tpan = { x: e.touches[0].clientX, y: e.touches[0].clientY, start: view.start, axis: 'x' };
+    }
+  });
 
   if (!inTauri) console.log('[preview] K线走 mock 随机游走');
 }
