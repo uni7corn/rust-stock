@@ -127,6 +127,21 @@ rust-stock/
 
 > 倒序排列，最新更新在最上方。每次代码更新都会同步追加到这里。
 
+## 2026-06-08（第二十五批：安卓首个 APK 构建成功 🎉）
+
+### 里程碑
+- 安卓端从源码到 APK 全流程打通，`cargo tauri android build --apk` 成功产出 `app-universal-release-unsigned.apk`
+- 验证了条件编译隔离 + rustls-tls + capabilities 平台拆分三项改动在 aarch64-linux-android 下编译通过
+
+### 本机构建环境要求（踩坑记录，供复现）
+- **Windows 开发人员模式**：Tauri 需把 `.so` 软链接进 jniLibs，须开启（设置→隐私和安全性→开发者选项）
+- **JDK 17+**：Android Gradle Plugin 要求；系统默认 JDK11 会失败。可用 Android Studio 自带 JBR，在 `gen/android/gradle.properties` 设 `org.gradle.java.home` 指向它
+- 安卓目标：`rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android`
+- 测试安装用 debug 包（自动签名）：`cargo tauri android build --apk --debug`；真机热更新：`cargo tauri android dev`
+
+### 下一阶段
+- 前端触屏适配：移动端平台检测、去 360 等比缩放、K线双指缩放、隐藏桌面窗口控制 UI、触控热区放大
+
 ## 2026-06-08（第二十四批：安卓权限隔离——autostart 拆桌面专属 capability）
 
 ### 修复（安卓交叉编译）
