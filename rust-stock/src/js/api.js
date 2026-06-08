@@ -49,6 +49,14 @@ export async function searchStocks(keyword) {
   } catch (e) { console.warn('搜索失败:', e); return []; }
 }
 
+export async function classifyNews(titles) {
+  if (!inTauri) return null;
+  try {
+    const r = await invoke('classify_news', { ...aiArgs(), titles });
+    return Array.isArray(r) ? r : null;
+  } catch (e) { console.warn('消息面分类失败:', e); return null; }
+}
+
 export async function fetchStockNews(codes) {
   if (!inTauri) return null;
   try {

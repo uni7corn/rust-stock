@@ -1,8 +1,10 @@
 // pages/market.js — 行情页：指数滚动条、市场情绪表盘（可翻面）、板块热力
-import { INDEX_CODES, fetchQuotes, fetchSentiment, explainSentiment, fetchStockNews } from '../api.js';
+import { INDEX_CODES, fetchQuotes, fetchSentiment, explainSentiment, fetchStockNews, classifyNews } from '../api.js';
 import { state, today, aiReady } from '../store.js';
+import { storeGet, storeSet } from '../store.js';
 import { nowHMS, flashHint } from '../ui.js';
 import { inTauri, invoke } from '../bridge.js';
+import { currentPage } from '../router.js';
 
 const mockIndices = [
   { name: '上证指数', val: '4095.45', chg: '-0.81%', up: false },
@@ -138,10 +140,13 @@ async function openSentWhy() {
 
 // ---------- 自选股信息：抓取与自选相关的最新快讯 ----------
 const mockWatchNews = [
-  { time: '2026-06-06 11:40:00', txt: '（预览示例）贵州茅台获机构密集调研，渠道反馈动销回暖', tag: '贵州茅台', stocks: [], url: '' },
-  { time: '2026-06-03 10:36:00', txt: '（预览示例）宁德时代中标海外大型储能项目', tag: '宁德时代', stocks: [], url: '' },
+  { time: '2026-06-06 11:40:00', txt: '（预览示例）贵州茅台获机构密集调研，渠道反馈动销回暖', tag: '贵州茅台', stocks: [], url: '', sentiment: 1 },
+  { time: '2026-06-03 10:36:00', txt: '（预览示例）宁德时代某海外项目延期，订单确认推迟', tag: '宁德时代', stocks: [], url: '', sentiment: -1 },
 ];
 let watchNews = null;
+// 标题 → 利好/利空判断的会话缓存（避免重复请求；持久化到 SQLite）
+let newsSentiment = {};
+let sentimentLoaded = false;
 
 // "YYYY-MM-DD HH:MM:SS" → 当天显示 HH:MM，往日显示 MM-DD
 function fmtNewsTime(s) {
@@ -156,6 +161,20 @@ export async function loadWatchNews() {
   if (!state.watchlist.length) { watchNews = []; return; }
   const items = await fetchStockNews(state.watchlist);
   if (items !== null) watchNews = items;
+  await classifyWatchNews();
+}
+
+// 批量给未判断过的标题打利好/利空标签（AI），结果按标题缓存
+async function classifyWatchNews() {
+  if (!aiReady() || !watchNews || !watchNews.length) return;
+  if (!sentimentLoaded) { newsSentiment = await storeGet('news_sentiment', {}); sentimentLoaded = true; }
+  const todo = [...new Set(watchNews.map(n => n.txt).filter(txt => !(txt in newsSentiment)))].slice(0, 20);
+  if (!todo.length) return;
+  const labels = await classifyNews(todo);
+  if (!labels) return;
+  todo.forEach((txt, i) => { newsSentiment[txt] = labels[i] ?? 0; });
+  storeSet('news_sentiment', newsSentiment);
+  if (currentPage() === 'market') renderWatchNews(); // 标签到了重绘箭头
 }
 
 export function renderWatchNews() {
@@ -173,14 +192,21 @@ export function renderWatchNews() {
     return;
   }
   meta.textContent = `相关 ${list.length} 条`;
-  el.innerHTML = list.map((n, i) => `
-    <div class="feed-item${n.url ? ' has-link' : ''}" data-i="${i}" title="${n.url ? '点击打开原文' : ''}">
+  el.innerHTML = list.map((n, i) => {
+    const s = (typeof n.sentiment === 'number') ? n.sentiment : (newsSentiment[n.txt] ?? null);
+    let arrow = '';
+    if (s === 1) arrow = '<span class="news-arrow up-c" title="利好">▲</span>';
+    else if (s === -1) arrow = '<span class="news-arrow down-c" title="利空">▼</span>';
+    else if (s === 0) arrow = '<span class="news-arrow neu" title="中性/影响不明">—</span>';
+    // s===null：AI 尚未判断，暂不显示
+    return `<div class="feed-item${n.url ? ' has-link' : ''}" data-i="${i}" title="${n.url ? '点击打开原文' : ''}">
       <span class="feed-time">${fmtNewsTime(n.time)}</span>
       <div class="feed-body">
-        <div class="feed-txt">${n.txt}</div>
+        <div class="feed-txt">${arrow}${n.txt}</div>
         ${n.tag ? `<div class="feed-tags"><span class="tag neutral">${n.tag}</span></div>` : ''}
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 // 点击条目用系统浏览器打开原文

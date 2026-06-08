@@ -79,6 +79,51 @@ async fn fetch_stock_news(codes: Vec<String>) -> Result<Vec<feed::NewsItem>, Str
     feed::fetch_stock_news(&codes).await
 }
 
+/// 批量判断新闻标题对相关公司是利好/利空/中性（一次请求判一批，省 token）。
+/// 返回与输入等长的数组：1=利好 -1=利空 0=中性。
+#[tauri::command]
+async fn classify_news(
+    key: String,
+    base_url: Option<String>,
+    model: Option<String>,
+    titles: Vec<String>,
+) -> Result<Vec<i32>, String> {
+    if titles.is_empty() {
+        return Ok(vec![]);
+    }
+    let cfg = ai::AiConfig::new(key, base_url, model)?;
+    let numbered: String = titles
+        .iter()
+        .enumerate()
+        .map(|(i, s)| format!("{}. {}", i + 1, s))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let prompt = format!(
+        "判断下列每条A股新闻标题对相关公司股价是利好、利空还是中性。         只输出一个 JSON 整数数组，长度必须等于条数（{n} 条），按顺序对应：         1=利好，-1=利空，0=中性或无法判断。不要输出任何解释。\n\n{numbered}",
+        n = titles.len()
+    );
+    let messages = vec![
+        serde_json::json!({ "role": "system", "content": "你是A股消息面分析助手，只输出 JSON 整数数组。" }),
+        serde_json::json!({ "role": "user", "content": prompt }),
+    ];
+    let content = ai::chat_once(&cfg, messages, 0.2).await?;
+    let arr = ai::extract_json_array(&content)?;
+    let list = arr.as_array().ok_or("AI 返回的不是数组")?;
+    // 对齐长度：缺失补 0，越界忽略，值钳到 -1/0/1
+    let mut out = vec![0i32; titles.len()];
+    for (i, v) in list.iter().enumerate() {
+        if i >= out.len() {
+            break;
+        }
+        out[i] = match v.as_i64().unwrap_or(0) {
+            x if x > 0 => 1,
+            x if x < 0 => -1,
+            _ => 0,
+        };
+    }
+    Ok(out)
+}
+
 /// 历史K线。period: "day" | "week" | "month"
 #[tauri::command]
 async fn fetch_kline(code: String, period: String, count: u32) -> Result<Vec<kline::Candle>, String> {
@@ -599,6 +644,7 @@ pub fn run() {
             list_sources,
             fetch_news,
             fetch_stock_news,
+            classify_news,
             fetch_sentiment,
             fetch_kline,
             ai_recommend,
