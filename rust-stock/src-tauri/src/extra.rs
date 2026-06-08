@@ -85,18 +85,22 @@ pub struct FundFlow {
     pub small: f64,      // 小单
 }
 
-/// 解析东财 stock/get 资金流：data 对象
-/// f62 主力净额, f184 主力净占比, f66 超大单, f72 大单, f78 中单, f84 小单, f57 代码, f58 名称
+/// 解析东财资金流 ulist.np/get：{"data":{"diff":[{...}]}}（与行情同结构）
+/// f12 代码, f14 名称, f62 主力净额(元), f184 主力净占比%,
+/// f66 超大单净额, f72 大单, f78 中单, f84 小单
 pub fn parse_fund_flow(body: &str) -> Option<FundFlow> {
     let v: serde_json::Value = serde_json::from_str(body).ok()?;
-    let d = &v["data"];
-    if d.is_null() {
+    let diff = &v["data"]["diff"];
+    let d = if let Some(a) = diff.as_array() {
+        a.first()?.clone()
+    } else if let Some(o) = diff.as_object() {
+        o.values().next()?.clone()
+    } else {
         return None;
-    }
-    let name = d["f58"].as_str().unwrap_or("").to_string();
+    };
     Some(FundFlow {
-        name,
-        code: d["f57"].as_str().unwrap_or("").to_string(),
+        name: d["f14"].as_str().unwrap_or("").to_string(),
+        code: d["f12"].as_str().unwrap_or("").to_string(),
         main: num(&d["f62"]),
         main_pct: num(&d["f184"]),
         super_big: num(&d["f66"]),
@@ -109,9 +113,10 @@ pub fn parse_fund_flow(body: &str) -> Option<FundFlow> {
 #[cfg(feature = "net")]
 pub async fn fetch_fund_flow(code: &str) -> Result<FundFlow, String> {
     let secid = crate::sources::to_secid(code).ok_or_else(|| format!("无法识别代码: {code}"))?;
+    // 用资金流专用 ulist.np/get（与行情同接口，换资金流字段），stock/get 不返回资金流
     let url = format!(
-        "https://push2.eastmoney.com/api/qt/stock/get?secid={secid}&fltt=2&invt=2\
-         &fields=f57,f58,f62,f184,f66,f72,f78,f84&ut=fa5fd1943c7b386f172d6893dbfba10b"
+        "https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&invt=2&secids={secid}\
+         &fields=f12,f14,f62,f184,f66,f72,f78,f84"
     );
     let resp = reqwest::Client::new()
         .get(&url)
@@ -151,11 +156,14 @@ mod tests {
 
     #[test]
     fn test_parse_fund_flow() {
-        let raw = r#"{"data":{"f57":"600519","f58":"贵州茅台","f62":12345678.0,"f184":5.2,"f66":8000000.0,"f72":4345678.0,"f78":-2000000.0,"f84":-1000000.0}}"#;
+        // 东财资金流 ulist 真实形状（元为单位）：主力 -2.9145亿
+        let raw = r#"{"data":{"diff":[{"f12":"600519","f14":"贵州茅台","f62":-291450000.0,"f184":-2.44,"f66":-742950000.0,"f72":451500000.0,"f78":309150000.0,"f84":-17702336.0}]}}"#;
         let f = parse_fund_flow(raw).unwrap();
         assert_eq!(f.name, "贵州茅台");
-        assert!((f.main - 12345678.0).abs() < 1.0);
-        assert!((f.main_pct - 5.2).abs() < 0.01);
-        assert!(parse_fund_flow(r#"{"data":null}"#).is_none());
+        assert!((f.main - (-291450000.0)).abs() < 1.0);
+        assert!((f.main_pct - (-2.44)).abs() < 0.01);
+        assert!((f.big - 451500000.0).abs() < 1.0);
+        assert!(parse_fund_flow(r#"{"data":{"diff":[]}}"#).is_none());
+        assert!(parse_fund_flow("x").is_none());
     }
 }
