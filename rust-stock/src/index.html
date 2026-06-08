@@ -95,6 +95,7 @@
   }
   body.mobile .nav-item { padding: 8px 0; }           /* 触控热区放大 */
   body.mobile .nav-item:active { background: var(--surface-3); } /* 触摸反馈 */
+  body.mobile .desktop-only { display: none; }  /* 桌面专属设置(自启/关闭行为)移动端隐藏 */
 
   /* ---------- 指数滚动条 ---------- */
   .ticker {
@@ -741,11 +742,11 @@
             <label>AI 模型（留空 = deepseek-chat）</label>
             <input class="w-input" id="setAiModel" placeholder="deepseek-chat" />
           </div>
-          <div class="set-group">
+          <div class="set-group desktop-only">
             <label>开机自启动</label>
             <button class="w-btn wide" id="autostartBtn" style="background:var(--surface-3);color:var(--txt-2)">检测中…</button>
           </div>
-          <div class="set-group">
+          <div class="set-group desktop-only">
             <label>关闭按钮行为</label>
             <button class="w-btn wide" id="resetCloseBtn" style="background:var(--surface-3);color:var(--txt-2)">重置（下次关闭重新询问）</button>
           </div>
