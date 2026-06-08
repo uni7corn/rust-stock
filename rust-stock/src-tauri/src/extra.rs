@@ -77,12 +77,17 @@ pub async fn fetch_sectors() -> Result<Vec<Sector>, String> {
 pub struct FundFlow {
     pub name: String,
     pub code: String,
-    pub main: f64,       // 主力净流入（元）
-    pub main_pct: f64,   // 主力净占比 %
-    pub super_big: f64,  // 超大单净额
-    pub big: f64,        // 大单
-    pub mid: f64,        // 中单
-    pub small: f64,      // 小单
+    pub main: f64,           // 主力净流入（元）
+    pub main_pct: f64,       // 主力净占比 %
+    pub super_big: f64,      // 超大单净额
+    pub super_big_pct: f64,  // 超大单净占比 %
+    pub big: f64,            // 大单
+    pub big_pct: f64,        // 大单净占比 %
+    pub mid: f64,            // 中单
+    pub mid_pct: f64,        // 中单净占比 %
+    pub small: f64,          // 小单
+    pub small_pct: f64,      // 小单净占比 %
+    pub turnover: f64,       // 换手率 %（f8）
 }
 
 /// 解析东财资金流 ulist.np/get：{"data":{"diff":[{...}]}}（与行情同结构）
@@ -104,9 +109,14 @@ pub fn parse_fund_flow(body: &str) -> Option<FundFlow> {
         main: num(&d["f62"]),
         main_pct: num(&d["f184"]),
         super_big: num(&d["f66"]),
+        super_big_pct: num(&d["f69"]),
         big: num(&d["f72"]),
+        big_pct: num(&d["f75"]),
         mid: num(&d["f78"]),
+        mid_pct: num(&d["f81"]),
         small: num(&d["f84"]),
+        small_pct: num(&d["f87"]),
+        turnover: num(&d["f8"]),
     })
 }
 
@@ -116,7 +126,7 @@ pub async fn fetch_fund_flow(code: &str) -> Result<FundFlow, String> {
     // 用资金流专用 ulist.np/get（与行情同接口，换资金流字段），stock/get 不返回资金流
     let url = format!(
         "https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&invt=2&secids={secid}\
-         &fields=f12,f14,f62,f184,f66,f72,f78,f84"
+         &fields=f8,f12,f14,f62,f184,f66,f69,f72,f75,f78,f81,f84,f87"
     );
     let resp = reqwest::Client::new()
         .get(&url)
@@ -157,12 +167,14 @@ mod tests {
     #[test]
     fn test_parse_fund_flow() {
         // 东财资金流 ulist 真实形状（元为单位）：主力 -2.9145亿
-        let raw = r#"{"data":{"diff":[{"f12":"600519","f14":"贵州茅台","f62":-291450000.0,"f184":-2.44,"f66":-742950000.0,"f72":451500000.0,"f78":309150000.0,"f84":-17702336.0}]}}"#;
+        let raw = r#"{"data":{"diff":[{"f8":1.85,"f12":"600519","f14":"贵州茅台","f62":-291450000.0,"f184":-2.44,"f66":-742950000.0,"f69":-6.22,"f72":451500000.0,"f75":3.78,"f78":309150000.0,"f81":2.59,"f84":-17702336.0,"f87":-0.15}]}}"#;
         let f = parse_fund_flow(raw).unwrap();
         assert_eq!(f.name, "贵州茅台");
         assert!((f.main - (-291450000.0)).abs() < 1.0);
         assert!((f.main_pct - (-2.44)).abs() < 0.01);
         assert!((f.big - 451500000.0).abs() < 1.0);
+        assert!((f.big_pct - 3.78).abs() < 0.01);
+        assert!((f.turnover - 1.85).abs() < 0.01);
         assert!(parse_fund_flow(r#"{"data":{"diff":[]}}"#).is_none());
         assert!(parse_fund_flow("x").is_none());
     }

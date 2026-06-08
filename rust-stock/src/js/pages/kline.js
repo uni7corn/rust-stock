@@ -159,39 +159,45 @@ function fmtAmt(yuan) {
 async function loadDetail(code) {
   const el = document.getElementById('stockDetail');
   el.innerHTML = '';
-  const quotes = await fetchQuotes([code]);
+  // 并行取行情快照 + 资金流（换手率随资金流接口一起来）
+  const [quotes, ff] = await Promise.all([fetchQuotes([code]), fetchFundFlow(code)]);
   const q = quotes && quotes[0];
   let html = '';
   if (q) {
     const volWan = (q.volume / 1e4).toFixed(0); // 手→万手 约略
+    const amp = q.prev_close ? (q.high - q.low) / q.prev_close * 100 : 0;
+    const turn = (ff && ff.turnover) ? ff.turnover.toFixed(2) + '%' : '--';
+    const chgCls = q.change >= 0 ? 'up-c' : 'down-c';
     const cells = [
-      ['今开', q.open ? q.open.toFixed(2) : '--'],
-      ['昨收', q.prev_close ? q.prev_close.toFixed(2) : '--'],
-      ['最高', q.high ? q.high.toFixed(2) : '--'],
-      ['最低', q.low ? q.low.toFixed(2) : '--'],
-      ['成交量', q.volume ? volWan + '万手' : '--'],
-      ['成交额', q.amount ? (q.amount / 1e8).toFixed(2) + '亿' : '--'],
+      ['今开', q.open ? q.open.toFixed(2) : '--', ''],
+      ['昨收', q.prev_close ? q.prev_close.toFixed(2) : '--', ''],
+      ['最高', q.high ? q.high.toFixed(2) : '--', 'up-c'],
+      ['最低', q.low ? q.low.toFixed(2) : '--', 'down-c'],
+      ['换手率', turn, ''],
+      ['振幅', amp ? amp.toFixed(2) + '%' : '--', ''],
+      ['成交量', q.volume ? volWan + '万手' : '--', ''],
+      ['成交额', q.amount ? (q.amount / 1e8).toFixed(2) + '亿' : '--', ''],
+      ['涨跌额', (q.change >= 0 ? '+' : '') + q.change.toFixed(2), chgCls],
     ];
     html += '<div class="sd-grid">' + cells.map(c =>
-      `<div class="sd-cell"><div class="k">${c[0]}</div><div class="v">${c[1]}</div></div>`).join('') + '</div>';
+      `<div class="sd-cell"><div class="k">${c[0]}</div><div class="v ${c[2]}">${c[1]}</div></div>`).join('') + '</div>';
   }
-  // 资金流（红=流入，绿=流出；失败则不显示）
-  const ff = await fetchFundFlow(code);
+  // 资金流（红=净流入，绿=净流出；每行带净占比；失败则不显示）
   if (ff) {
     const rows = [
       ['主力净流入', ff.main, ff.main_pct],
-      ['超大单', ff.super_big, null],
-      ['大单', ff.big, null],
-      ['中单', ff.mid, null],
-      ['小单', ff.small, null],
+      ['超大单', ff.super_big, ff.super_big_pct],
+      ['大单', ff.big, ff.big_pct],
+      ['中单', ff.mid, ff.mid_pct],
+      ['小单', ff.small, ff.small_pct],
     ];
     const max = Math.max(1, ...rows.map(r => Math.abs(r[1])));
-    html += '<div class="sd-flow-title">资金流向（今日）</div><div class="sd-flow">' + rows.map(r => {
+    html += '<div class="sd-flow-title">资金流向（今日 · 红净流入 / 绿净流出）</div><div class="sd-flow">' + rows.map(r => {
       const inflow = r[1] >= 0;
       const w = Math.min(50, Math.abs(r[1]) / max * 50);
       const color = inflow ? 'var(--up)' : 'var(--down)';
       const bar = `<i style="${inflow ? 'left:50%' : 'right:50%'};width:${w}%;background:${color}"></i>`;
-      const pct = r[2] != null ? ` (${r[2].toFixed(1)}%)` : '';
+      const pct = (r[2] != null && r[2] !== 0) ? ` (${r[2] >= 0 ? '+' : ''}${r[2].toFixed(2)}%)` : '';
       return `<div class="sd-flow-row"><span class="fk">${r[0]}</span>
         <span class="fbar">${bar}</span>
         <span class="fv" style="color:${color}">${fmtAmt(r[1])}${pct}</span></div>`;
