@@ -69,14 +69,11 @@ pub async fn fetch_sectors() -> Result<Vec<Sector>, String> {
     // m:90 t:2 = 行业板块；按涨跌幅 f3 降序
     let url = "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=60&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:90+t:2&fields=f3,f12,f14&ut=bd1d9ddb04089700cf9c27f6f7426281";
     // 配 UA + 超时；启动时多请求并发，连接易抖动 → 重试 3 次
-    // 强制 HTTP/1.1 + 关连接池：东财 clist 返回后不发 TLS close_notify 就断开，
-    // rustls 默认严格判错（peer closed without close_notify）。h1 + Content-Length
-    // 下 body 收满即返回，规避该误判。
+    // 用默认客户端(允许 HTTP/2)：h2 用帧明确结束响应，TCP 收尾不发 close_notify 也不报错
+    // （东财 clist 在 h1 close-delimited 下会触发 rustls close_notify 误判）。
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36")
         .timeout(std::time::Duration::from_secs(12))
-        .http1_only()
-        .pool_max_idle_per_host(0)
         .build()
         .map_err(|e| format!("板块客户端构建失败: {e}"))?;
     let mut last = String::from("未知错误");

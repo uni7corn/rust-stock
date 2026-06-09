@@ -67,7 +67,9 @@ pub fn parse_em_news(body: &str) -> Vec<NewsItem> {
                 .as_array()
                 .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
                 .unwrap_or_default();
-            Some(NewsItem { time, txt, tag, stocks, url: String::new() })
+            let code = item["code"].as_str().unwrap_or("");
+            let url = if code.is_empty() { String::new() } else { format!("https://finance.eastmoney.com/a/{code}.html") };
+            Some(NewsItem { time, txt, tag, stocks, url })
         })
         .collect()
 }

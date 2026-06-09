@@ -11,7 +11,7 @@ import { invoke, isMobile } from './js/bridge.js';
 import { initScale } from './js/ui.js';
 import { initNav, onShow, currentPage } from './js/router.js';
 import { renderTicker, renderSentiment, renderHeat, initMarket, loadWatchNews, renderWatchNews } from './js/pages/market.js';
-import { loadNews, renderFeed } from './js/pages/news.js';
+import { loadNews, renderFeed, initNews } from './js/pages/news.js';
 import { renderWatch, initWatch } from './js/pages/watch.js';
 import { initChat } from './js/pages/chat.js';
 import { initSettings } from './js/pages/settings.js';
@@ -117,6 +117,7 @@ export function applyTheme() {
   onShow('market', () => { renderWatchNews(); loadWatchNews().then(renderWatchNews); });
 
   initNav();
+  initNews();
   initWindowControls();
   initMarket();
   initWatch();
