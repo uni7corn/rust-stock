@@ -159,7 +159,8 @@ function drawSpark(cv, candles) {
   if (closes.length < 2) return;
   const hi = Math.max(...closes), lo = Math.min(...closes), span = hi - lo || 1;
   const up = closes[closes.length - 1] >= closes[0];
-  const color = up ? '#ff4d4f' : '#14c87d';
+  const cs = getComputedStyle(document.body);
+  const color = up ? (cs.getPropertyValue('--up').trim() || '#ff4d4f') : (cs.getPropertyValue('--down').trim() || '#14c87d');
   const pad = 4;
   const xy = (c, i) => [pad + i / (closes.length - 1) * (W - pad * 2), H - pad - (c - lo) / span * (H - pad * 2)];
   // 渐变填充

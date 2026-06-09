@@ -81,11 +81,22 @@ setInterval(async () => {
   }
 }, 60_000);
 
+// ---------- 主题（磨砂奶白/磨砂黑，按本机时间自动切换；设置可锁定）----------
+export function applyTheme() {
+  const m = (state.settings && state.settings.theme) || 'auto'; // auto|day|night
+  const h = new Date().getHours();
+  const day = m === 'day' ? true : (m === 'night' ? false : (h >= 6 && h < 18));
+  document.body.classList.toggle('day', day);
+}
+
 // ---------- 启动 ----------
 (async function init() {
   document.body.classList.toggle('mobile', isMobile);
+  applyTheme();
   initScale();
   await loadAll(); // 先取 SQLite（浏览器回退 localStorage），再首屏渲染
+  applyTheme(); // 设置载入后按 theme 偏好重判
+  setInterval(applyTheme, 5 * 60 * 1000); // 每5分钟重判，自动在 6:00/18:00 切换
 
   onShow('news', () => { renderFeed('feedFull'); loadNews().then(() => renderFeed('feedFull')); });
   onShow('watch', renderWatch);

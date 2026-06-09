@@ -9,22 +9,47 @@
   @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 
   :root {
-    /* 深色纯净扁平：实色不透明，不依赖窗口模糊 */
-    --bg: #0a0c10;
-    --surface: #12151c;
-    --surface-2: #181c25;
-    --surface-3: #1f2430;
-    --line: #242a36;
-    --line-soft: #1a1f29;
-    --txt: #e8ecf2;
-    --txt-2: #9aa4b2;
-    --txt-3: #5c6470;
-    --up: #ff4d4f;      /* A股红涨 */
-    --down: #14c87d;    /* A股绿跌 */
-    --accent: #4d8dff;
-    --warn: #f5a623;
-    --radius: 14px;
-    --radius-sm: 9px;
+    --bg: #0e0e11;
+    --bg-grad: radial-gradient(120% 80% at 0% 0%, #1b1c22 0%, rgba(27,28,34,0) 55%), radial-gradient(120% 90% at 100% 100%, #17181d 0%, rgba(23,24,29,0) 50%), #0e0e11;
+    --surface: #1e1f25;
+    --surface-2: #24262e;
+    --surface-3: #2c2e38;
+    --glass: rgba(30,31,37,.55);
+    --glass-border: rgba(255,255,255,.08);
+    --grain: rgba(255,255,255,.025);
+    --blur: 22px;
+    --line: rgba(255,255,255,.10);
+    --line-soft: rgba(255,255,255,.06);
+    --txt: #f3f1ec;
+    --txt-2: #a8a6a0;
+    --txt-3: #6e6c66;
+    --up: #ff5d5d;
+    --down: #27c498;
+    --accent: #cda86f;
+    --warn: #e6b35c;
+    --radius: 18px;
+    --radius-sm: 12px;
+    --shadow: 0 12px 34px -12px rgba(0,0,0,.5);
+  }
+  body.day {
+    --bg: #f1ebdf;
+    --bg-grad: radial-gradient(120% 80% at 0% 0%, #fbf8f1 0%, rgba(251,248,241,0) 55%), radial-gradient(120% 90% at 100% 100%, #efe9dc 0%, rgba(239,233,220,0) 55%), #f1ebdf;
+    --surface: #fffdf8;
+    --surface-2: #f4efe5;
+    --surface-3: #e9e2d4;
+    --glass: rgba(255,253,248,.6);
+    --glass-border: rgba(40,36,30,.09);
+    --grain: rgba(70,55,35,.03);
+    --line: rgba(40,36,30,.1);
+    --line-soft: rgba(40,36,30,.07);
+    --txt: #2a2620;
+    --txt-2: #6b665d;
+    --txt-3: #9a958b;
+    --up: #e0483f;
+    --down: #0fa676;
+    --accent: #a9802f;
+    --warn: #b8893a;
+    --shadow: 0 12px 30px -14px rgba(90,70,40,.16);
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; }
@@ -45,9 +70,10 @@
     position: relative;
     width: 100%;
     height: 100%;
-    background: var(--bg);
+    background: radial-gradient(var(--grain) 1px, transparent 1px) 0 0 / 3px 3px, var(--bg-grad);
     border: 1px solid var(--line);
     border-radius: 18px;
+    transition: background .5s ease;
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -63,7 +89,7 @@
     align-items: center;
     gap: 9px;
     padding: 0 12px;
-    background: linear-gradient(180deg, var(--surface) 0%, rgba(18,21,28,.6) 100%);
+    background: var(--surface);
     border-bottom: 1px solid var(--line-soft);
   }
   .logo-img {
@@ -89,7 +115,7 @@
   body.mobile .titlebar {
     height: calc(48px + env(safe-area-inset-top, 0px));
     padding-top: env(safe-area-inset-top, 0px);       /* 避开状态栏/刘海 */
-    background: #12151C;                                /* 纯色，与状态栏区(MainActivity内容底色)无缝，去掉"黑边"感 */
+    background: var(--surface);                                /* 纯色，与状态栏区(MainActivity内容底色)无缝，去掉"黑边"感 */
   }
   body.mobile .nav {
     padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); /* 避开底部手势条 */
@@ -140,10 +166,13 @@
   .body::-webkit-scrollbar-thumb:hover { background: var(--line); }
 
   .card {
-    background: var(--surface);
-    border: 1px solid var(--line-soft);
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(var(--blur)) saturate(1.2);
+    backdrop-filter: blur(var(--blur)) saturate(1.2);
+    border: 1px solid var(--glass-border);
     border-radius: var(--radius);
-    padding: 14px;
+    padding: 15px 16px;
+    box-shadow: var(--shadow);
   }
   .card-head { display: flex; align-items: center; gap: 7px; margin-bottom: 12px; }
   .card-head .bar { width: 3px; height: 13px; border-radius: 2px; background: var(--accent); }
@@ -281,7 +310,7 @@
   .m-btn.danger { color: var(--up); border-color: rgba(255,77,79,.4); }
   .m-btn.primary:hover { filter: brightness(1.1); background: var(--accent); }
 
-  .nav { display: flex; padding: 4px 8px 8px; }
+  .nav { display: flex; padding: 4px 8px 8px; background: var(--glass); -webkit-backdrop-filter: blur(var(--blur)); backdrop-filter: blur(var(--blur)); border-top: 1px solid var(--line-soft); }
   .nav-item {
     flex: 1;
     display: flex; flex-direction: column; align-items: center; gap: 3px;

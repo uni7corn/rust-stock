@@ -70,16 +70,21 @@ function draw() {
   const step = plotW / n;
   const bw = Math.max(1.5, step * 0.62);
 
-  const UP = '#ff4d4f', DOWN = '#14c87d';
+  const cs = getComputedStyle(document.body);
+  const UP = cs.getPropertyValue('--up').trim() || '#ff4d4f';
+  const DOWN = cs.getPropertyValue('--down').trim() || '#14c87d';
+  const GRID = cs.getPropertyValue('--line-soft').trim() || 'rgba(255,255,255,.05)';
+  const AXIS = cs.getPropertyValue('--txt-3').trim() || '#5c6470';
+  const HOLLOW = cs.getPropertyValue('--surface').trim() || '#12151c';
 
   ctx.font = '16px "DM Mono", monospace';
   ctx.textBaseline = 'middle';
   for (let i = 0; i <= 4; i++) {
     const p = hi - span * i / 4;
     const yy = y(p);
-    ctx.strokeStyle = 'rgba(255,255,255,.05)';
+    ctx.strokeStyle = GRID;
     ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(W - padR, yy); ctx.stroke();
-    ctx.fillStyle = '#5c6470';
+    ctx.fillStyle = AXIS;
     ctx.fillText(p.toFixed(2), W - padR + 6, yy);
   }
 
@@ -90,7 +95,7 @@ function draw() {
     ctx.beginPath(); ctx.moveTo(x, y(c.high)); ctx.lineTo(x, y(c.low)); ctx.stroke();
     const yo = y(c.open), yc = y(c.close);
     const top = Math.min(yo, yc), hgt = Math.max(1.5, Math.abs(yo - yc));
-    if (up) { ctx.fillStyle = '#12151c'; ctx.fillRect(x - bw / 2, top, bw, hgt); ctx.strokeRect(x - bw / 2, top, bw, hgt); }
+    if (up) { ctx.fillStyle = HOLLOW; ctx.fillRect(x - bw / 2, top, bw, hgt); ctx.strokeRect(x - bw / 2, top, bw, hgt); }
     else ctx.fillRect(x - bw / 2, top, bw, hgt);
     const vh = c.volume / maxVol * volH;
     ctx.fillStyle = up ? 'rgba(255,77,79,.5)' : 'rgba(20,200,125,.5)';
@@ -112,7 +117,7 @@ function draw() {
   drawMa(maSlice(5, view.start, view.count), '#f5a623');
   drawMa(maSlice(10, view.start, view.count), '#4d8dff');
 
-  ctx.fillStyle = '#5c6470';
+  ctx.fillStyle = AXIS;
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(candles[0].date, padL, priceH + 18);
   const lastD = candles[n - 1].date;
