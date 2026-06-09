@@ -114,7 +114,7 @@ function renderFav() {
     return `<div class="fav-group"><h4><span data-gname="${g.id}">${esc(g.name)}</span><button class="ren" data-ren="${g.id}">改名</button></h4>${ih}</div>`;
   }).join('') + '<div class="fav-empty" style="margin-top:6px">同步到云端（多设备）为付费功能，敬请期待。</div>';
 }
-function openFav() { renderFav(); document.getElementById('favModal').classList.add('open'); }
+export function openFav() { renderFav(); document.getElementById('favModal').classList.add('open'); }
 
 function startRename(gid) {
   const g = state.research.groups.find(x => x.id === gid);

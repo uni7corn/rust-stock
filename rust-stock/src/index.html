@@ -547,6 +547,18 @@
   .rec-row .rec-spark:hover { border-color: var(--accent); }
   .rec-row .rec-spark:active { opacity: .7; }
   .spark-label { background: #ffd84d; color: #d40000; font-weight: 700; padding: 0 5px; border-radius: 3px; white-space: nowrap; }
+  .seg { display: flex; gap: 6px; }
+  .seg button { flex: 1; height: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); color: var(--txt-2); font-size: 12px; font-family: 'Sora',sans-serif; cursor: pointer; }
+  .seg button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .key-input-wrap { position: relative; }
+  .key-input-wrap .w-input { padding-right: 32px; }
+  .key-x { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; border: none; background: transparent; color: var(--txt-3); cursor: pointer; font-size: 13px; }
+  .key-set-row { display: flex; align-items: center; gap: 10px; }
+  .key-ok { flex: 1; color: var(--down); font-size: 12px; font-weight: 500; }
+  .w-btn-sm { height: 28px; padding: 0 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-2); color: var(--txt-2); font-size: 11px; font-family: 'Sora',sans-serif; cursor: pointer; }
+  .w-btn-sm.danger { color: var(--up); border-color: rgba(255,77,79,.4); }
+  .set-adv { margin-bottom: 12px; }
+  .set-adv summary { font-size: 12px; color: var(--txt-2); cursor: pointer; padding: 6px 0; }
   .rec-refresh {
     border: none; background: transparent; color: var(--txt-3);
     font-size: 10px; cursor: pointer; font-family: 'Sora', sans-serif;
@@ -802,16 +814,40 @@
             <input class="w-input" id="setInterval" type="number" min="3" max="600" />
           </div>
           <div class="set-group">
+            <label>主题</label>
+            <div class="seg" id="themeSeg">
+              <button type="button" data-theme="auto">跟随时间</button>
+              <button type="button" data-theme="day">浅色</button>
+              <button type="button" data-theme="night">深色</button>
+            </div>
+          </div>
+          <div class="set-group">
             <label>AI API Key（默认 DeepSeek）</label>
-            <input class="w-input" id="setKey" type="password" placeholder="sk-…" />
+            <div id="keySet" style="display:none">
+              <div class="key-set-row"><span class="key-ok">✓ 已接入 API Key</span>
+                <button type="button" class="w-btn-sm" id="keyEdit">修改</button>
+                <button type="button" class="w-btn-sm danger" id="keyClear">清除</button>
+              </div>
+            </div>
+            <div id="keyEditBox" class="key-input-wrap">
+              <input class="w-input" id="setKey" type="password" placeholder="sk-…" />
+              <button type="button" class="key-x" id="keyX" title="清空" aria-label="清空">✕</button>
+            </div>
           </div>
+          <details class="set-adv">
+            <summary>高级：Base URL / 模型（默认 DeepSeek，一般不用动）</summary>
+            <div class="set-group" style="margin-top:10px">
+              <label>AI Base URL（留空 = api.deepseek.com）</label>
+              <input class="w-input" id="setAiBase" placeholder="https://api.deepseek.com" />
+            </div>
+            <div class="set-group">
+              <label>AI 模型（留空 = deepseek-chat）</label>
+              <input class="w-input" id="setAiModel" placeholder="deepseek-chat" />
+            </div>
+          </details>
           <div class="set-group">
-            <label>AI Base URL（留空 = api.deepseek.com，可填任意 OpenAI 兼容服务）</label>
-            <input class="w-input" id="setAiBase" placeholder="https://api.deepseek.com" />
-          </div>
-          <div class="set-group">
-            <label>AI 模型（留空 = deepseek-chat）</label>
-            <input class="w-input" id="setAiModel" placeholder="deepseek-chat" />
+            <label>深度调研收藏</label>
+            <button type="button" class="w-btn wide" id="openFavBtn" style="background:var(--surface-3);color:var(--txt-2)">查看我的分组与收藏</button>
           </div>
           <div class="set-group desktop-only">
             <label>开机自启动</label>
