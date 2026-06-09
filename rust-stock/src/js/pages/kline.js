@@ -199,8 +199,9 @@ async function loadDetail(code) {
       const inflow = val >= 0;
       // 非零值给最小 6% 宽度，保证肉眼可见
       const w = val === 0 ? 0 : Math.max(6, Math.min(50, Math.abs(val) / max * 50));
-      const color = inflow ? 'var(--up)' : 'var(--down)';
-      const bar = `<i style="${inflow ? 'left:50%' : 'right:50%'};width:${w}%;background:${color};height:100%"></i>`;
+      const color = inflow ? '#ff4d4f' : '#14c87d';
+      // 全内联样式（不依赖 CSS 规则），杜绝 position/颜色不生效导致条不显示
+      const bar = `<i style="position:absolute;top:0;bottom:0;display:block;${inflow ? 'left:50%' : 'right:50%'};width:${w}%;background:${color};border-radius:3px"></i>`;
       const p2 = Number(r[2]);
       const pct = (Number.isFinite(p2) && p2 !== 0) ? ` (${p2 >= 0 ? '+' : ''}${p2.toFixed(2)}%)` : '';
       return `<div class="sd-flow-row"><span class="fk">${r[0]}</span>
@@ -307,6 +308,4 @@ export function initKline() {
   }, { passive: false });
 
   cv.addEventListener('touchend', (e) => {
-    if (e.touches.length === 0) { tpan = null; pinch = null; }
-    else if (e.touches.length === 1) {       // 双指退到单指：重置平移基准
-  
+    

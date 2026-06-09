@@ -87,16 +87,34 @@ pub async fn fetch_sectors() -> Result<Vec<Sector>, String> {
             .send()
             .await
         {
-            Ok(resp) => match resp.text().await {
-                Ok(text) => {
+            Ok(mut resp) => {
+                // 手动累积 body：东财 clist 收完整 JSON 后不发 TLS close_notify 就断，
+                // rustls 判错（http1_only 也救不了）。这里拿到完整 body 即用，忽略尾部 unclean close。
+                let mut buf: Vec<u8> = Vec::new();
+                let mut chunk_err: Option<reqwest::Error> = None;
+                loop {
+                    match resp.chunk().await {
+                        Ok(Some(c)) => buf.extend_from_slice(&c),
+                        Ok(None) => break,
+                        Err(e) => {
+                            chunk_err = Some(e);
+                            break;
+                        }
+                    }
+                }
+                if !buf.is_empty() {
+                    let text = String::from_utf8_lossy(&buf);
                     let list = parse_sectors(&text);
                     if !list.is_empty() {
                         return Ok(list);
                     }
                     last = "板块解析为空（接口字段可能变了）".into();
+                } else if let Some(e) = chunk_err {
+                    last = format!("板块读取失败: {}", root_cause(&e));
+                } else {
+                    last = "板块响应为空".into();
                 }
-                Err(e) => last = format!("读取响应失败: {}", root_cause(&e)),
-            },
+            }
             Err(e) => last = format!("板块请求失败: {}", root_cause(&e)),
         }
         if attempt < 2 {
@@ -311,22 +329,4 @@ fn parse_lhb_codes(body: &str) -> std::collections::HashSet<String> {
 #[cfg(feature = "net")]
 async fn fetch_lhb_codes() -> std::collections::HashSet<String> {
     // 东财龙虎榜当日列表（取最近交易日，按上榜净额）
-    let url = "https://datacenter-web.eastmoney.com/api/data/v1/get?sortColumns=TRADE_DATE&sortTypes=-1&pageSize=200&pageNumber=1&reportName=RPT_DAILYBILLBOARD_DETAILSNEW&columns=SECURITY_CODE&source=WEB&client=WEB";
-    match reqwest::Client::new().get(url).header("Referer", "https://data.eastmoney.com/").send().await {
-        Ok(resp) => match resp.text().await {
-            Ok(t) => parse_lhb_codes(&t),
-            Err(_) => Default::default(),
-        },
-        Err(_) => Default::default(),
-    }
-}
-
-/// 候选池：涨幅榜 top + 主力净流入榜 top 合并去重，标记龙虎榜
-#[cfg(feature = "net")]
-pub async fn fetch_candidates() -> Result<Vec<Candidate>, String> {
-    let (gainers, inflow, lhb) = tokio::join!(
-        clist_rank("f3", 35),   // 涨幅榜
-        clist_rank("f62", 35),  // 主力净流入榜
-        fetch_lhb_codes(),
-    );
-    let mut map: std::collections::BTreeMap<String, Candidate> = std::collections::BTreeMap:
+    let url = "https://datacenter-web.eastmoney.com/api/data/v1/get?sortC
