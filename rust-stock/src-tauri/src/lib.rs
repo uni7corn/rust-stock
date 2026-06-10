@@ -309,6 +309,29 @@ pub struct RecStock {
     pub change_pct: f64, // 真实当日涨跌幅
 }
 
+/// 单股产业链深度调研（复用「研」的方法论 RESEARCH_SYSTEM）。
+/// 失败返回空串——单股深调失败只是该股缺「深度调研」段，不拖垮整次推荐。
+async fn deep_research_stock(
+    cfg: &ai::AiConfig,
+    name: &str,
+    code: &str,
+    price: f64,
+    change_pct: f64,
+    extra: &str,
+) -> String {
+    let real = if price > 0.0 {
+        format!("真实行情：现价 {price:.2}，今日涨跌 {change_pct:+.2}%{extra}（这些数字真实，可引用）")
+    } else {
+        "（暂无实时行情，禁止编造价格/涨跌幅）".to_string()
+    };
+    let user = format!("请对A股「{name}」（代码 {code}）做单股产业链深度调研。{real}\n套用你的产业链调研方法，分节输出、每节用「」标出，中文 400~600 字：\n「产业链位置」在哪条产业链的哪一层，上游供给什么、下游卖给谁；\n「卡点与稀缺性」控制/供应稀缺环节还是仅受益主题，稀缺来自认证周期/扩产难度/工艺壁垒哪项；\n「多流派多空」价值/成长/游资/技术/宏观 各一句给倾向；\n「催化与验证」未来1~4个季度看哪些财报/公告/订单信号确认或推翻；\n「主要风险」与「证伪条件」各一节；\n「研究优先级」给 0~100 倾向分并说明加减分。\n除给定的现价与涨跌幅外禁止编造其他具体数字。直接输出正文，不要 markdown 代码块。");
+    let messages = vec![
+        serde_json::json!({ "role": "system", "content": RESEARCH_SYSTEM }),
+        serde_json::json!({ "role": "user", "content": user }),
+    ];
+    ai::chat_once(cfg, messages, 0.4).await.unwrap_or_default()
+}
+
 #[tauri::command]
 async fn ai_recommend(
     key: String,
@@ -336,7 +359,7 @@ async fn ai_recommend(
 
     // 2) 多流派 + 供应链 + 龙虎榜 的深度 prompt（ai-hedge-fund 范式）
     let prompt = format!(
-        "{context}。\n{pool_text}\n         请从上述候选池里精选 8~12 支今日最值得关注的A股，按以下方法综合判断：\n         A) 供应链瓶颈研究法打底：判断它在产业链哪一层、是否卡住稀缺环节、上下游传导；\n         B) 多流派视角各自打分（借鉴 ai-hedge-fund）：用 价值派(护城河/估值安全边际)、成长派(行业S曲线/TAM)、游资打板派(题材热度/龙虎榜/换手量能)、技术派(趋势/突破/均线)、宏观派(政策/资金面) 五个视角分别给倾向，再综合裁决；\n         C) 龙虎榜与主力资金：标注[今日上龙虎榜]或主力大幅净流入的，是游资/机构关注信号，要重点说明；\n         重要：当日下跌不是淘汰理由——回调中的优质股(基本面强、卡住稀缺环节、主力仍在流入)同样可以推荐，请说明逻辑；避开 ST/退市风险股。\n         每支 reason 写 200~350 字，依次覆盖：「产业链位置」「多流派分歧(逐个流派一句话:价值/成长/游资/技术/宏观)」「龙虎榜/资金信号」「为什么今日值得关注」「主要风险」「证伪条件」。\n         禁止编造候选池里没有的价格/涨跌幅。严格只输出 JSON 数组，每元素：\n         [{{\"code\":\"sh600519\",\"name\":\"名称\",\"score\":1到100整数(综合看好度),\"reason\":\"…\"}}]"
+        "{context}。\n{pool_text}\n         请从上述候选池里精选 6~8 支今日最值得关注的A股，按以下方法综合判断：\n         A) 供应链瓶颈研究法打底：判断它在产业链哪一层、是否卡住稀缺环节、上下游传导；\n         B) 多流派视角各自打分（借鉴 ai-hedge-fund）：用 价值派(护城河/估值安全边际)、成长派(行业S曲线/TAM)、游资打板派(题材热度/龙虎榜/换手量能)、技术派(趋势/突破/均线)、宏观派(政策/资金面) 五个视角分别给倾向，再综合裁决；\n         C) 龙虎榜与主力资金：标注[今日上龙虎榜]或主力大幅净流入的，是游资/机构关注信号，要重点说明；\n         重要：当日下跌不是淘汰理由——回调中的优质股(基本面强、卡住稀缺环节、主力仍在流入)同样可以推荐，请说明逻辑；避开 ST/退市风险股。\n         每支 reason 写 200~350 字，依次覆盖：「产业链位置」「多流派分歧(逐个流派一句话:价值/成长/游资/技术/宏观)」「龙虎榜/资金信号」「为什么今日值得关注」「主要风险」「证伪条件」。\n         禁止编造候选池里没有的价格/涨跌幅。严格只输出 JSON 数组，每元素：\n         [{{\"code\":\"sh600519\",\"name\":\"名称\",\"score\":1到100整数(综合看好度),\"reason\":\"…\"}}]"
     );
     let messages = vec![
         serde_json::json!({ "role": "system", "content": "你是严谨的A股产业链+多流派研究助手，方法论：供应链瓶颈优先，叠加价值/成长/游资/技术/宏观多视角打分后综合裁决。只输出 JSON 数组，不输出任何其他文字。推荐仅供参考，不构成投资建议。" }),
@@ -352,7 +375,7 @@ async fn ai_recommend(
         candidates.iter().map(|c| (c.code.as_str(), c)).collect();
 
     let mut out: Vec<RecStock> = Vec::new();
-    for item in list.iter().take(12) {
+    for item in list.iter().take(8) {
         let raw_code = item["code"].as_str().unwrap_or("").trim().to_lowercase();
         let code = if raw_code.len() == 6 && raw_code.chars().all(|c| c.is_ascii_digit()) {
             let p = if raw_code.starts_with('6') || raw_code.starts_with('5') || raw_code.starts_with('9') { "sh" } else { "sz" };
@@ -385,6 +408,35 @@ async fn ai_recommend(
     if out.is_empty() {
         return Err("AI 未返回有效推荐，请点「重新生成」重试".into());
     }
+    out.truncate(8); // 仅对前 8 支做逐股深度调研，控制耗时与 Token
+
+    // 阶段2：对每支入选股再做单股产业链深度调研（与「研」同源），并发执行。
+    {
+        use tokio::task::JoinSet;
+        let mut set: JoinSet<(usize, String)> = JoinSet::new();
+        for (i, r) in out.iter().enumerate() {
+            let cfg2 = cfg.clone();
+            let name = r.name.clone();
+            let code = r.code.clone();
+            let price = r.price;
+            let chg = r.change_pct;
+            let extra = by_code
+                .get(code.as_str())
+                .map(|c| format!("，换手 {:.1}%，主力净额 {:.0}万{}", c.turnover, c.main_flow / 1e4, if c.on_lhb { "，今日上龙虎榜" } else { "" }))
+                .unwrap_or_default();
+            set.spawn(async move {
+                (i, deep_research_stock(&cfg2, &name, &code, price, chg, &extra).await)
+            });
+        }
+        while let Some(res) = set.join_next().await {
+            if let Ok((i, deep)) = res {
+                if !deep.trim().is_empty() {
+                    out[i].reason = format!("{}\n\n──────── 深度调研 ────────\n{}", out[i].reason, deep);
+                }
+            }
+        }
+    }
+
     Ok(out)
 }
 

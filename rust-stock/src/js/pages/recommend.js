@@ -58,7 +58,7 @@ async function generate(force = false, manual = false) {
   // manual=true 是用户点按钮，给出明确反馈；auto 模式保持安静
   if (!inTauri) { if (manual) flashHint('浏览器预览无法调用 AI'); return; }
   if (!aiReady()) { if (manual) flashHint('先在设置页接入 AI API Key'); return; }
-  if (pending) { if (manual) flashHint('AI 正在生成中，约需 1~3 分钟（筛全市场候选池 + 多流派深度分析），请稍候'); return; }
+  if (pending) { if (manual) flashHint('AI 正在生成中，约需 3~6 分钟（候选池初选 + 对每支入选股逐股深度调研），请稍候'); return; }
   const tk = today();
   if (!force && state.recHistory[tk]) return;
   pending = true;
@@ -116,7 +116,7 @@ export function renderRecommend(skipFill) {
   meta.textContent = recs ? tk : '';
   if (!recs) {
     if (pending) {
-      list.innerHTML = '<div class="rec-empty">⏳ AI 正在详尽分析今日盘面并用实时行情复核，约需 1~3 分钟（筛全市场候选池 + 多流派深度分析）…</div>';
+      list.innerHTML = '<div class="rec-empty">⏳ AI 正在初选候选池并对每支入选股逐股做产业链深度调研，约需 3~6 分钟…</div>';
       note.textContent = '';
     } else if (!aiReady()) {
       list.innerHTML = '<div class="rec-empty">接入 AI（设置页）后，每天自动生成 3 支推荐</div>';
@@ -161,7 +161,7 @@ export function renderRecommend(skipFill) {
       <button class="rec-add${inWl ? ' added' : ''}" data-add="${i}" title="${inWl ? '已在自选' : '一键加入自选'}">${inWl ? '✓' : '＋'}</button>
     </div>`;
   }).join('');
-  note.innerHTML = '右侧缩略图＝<span class="spark-label">近30日收盘价折线</span>（真实日K收盘价连线，点击看完整日K）。本地筛全市场候选池(涨幅/主力净流入/龙虎榜) → AI 用供应链瓶颈+多流派(价值/成长/游资/技术/宏观)+龙虎榜深度分析。近6日收盘价整体趋势下行（线性回归斜率为负）者已自动剔除。★=连续≥7推荐日同股。仅供参考，不构成投资建议。';
+  note.innerHTML = '右侧缩略图＝<span class="spark-label">近30日收盘价折线</span>（真实日K收盘价连线，点击看完整日K）。本地筛全市场候选池(涨幅/主力净流入/龙虎榜) → AI 用供应链瓶颈+多流派(价值/成长/游资/技术/宏观)+龙虎榜初选，再对每支入选股做单股产业链深度调研（与「研」同源）。近6日收盘价整体趋势下行（线性回归斜率为负）者已自动剔除。★=连续≥7推荐日同股。仅供参考，不构成投资建议。';
   drawSparks(recs);
   if (!skipFill && inTauri) { fillRecPrices(recs); ensureSparkData(recs); }
 }
