@@ -137,11 +137,43 @@ async function pickSectors() {
   }));
 }
 
+// 最近一次成功的真实板块（last-good 缓存）：失败时沿用，避免频繁请求触发的
+// rustls 偶发中断把界面打回"演示数据/请求失败"。
+let lastSectors = null;
+let lastSectorTs = 0;
+let heatBusy = false;
+
 export async function renderHeat() {
   const grid = document.getElementById('heatGrid');
-  let data = await pickSectors();
-  const real = !!data;
-  if (!data) data = heat; // 回退演示
+  const meta = document.getElementById('heatMeta');
+  let data, real = true, metaTxt;
+
+  const freshMs = Date.now() - lastSectorTs;
+  if (lastSectors && freshMs < 25000) {
+    // 25s 内有成功数据：直接复用，不再发请求（降低偶发中断概率）
+    data = lastSectors; metaTxt = nowHMS();
+  } else if (heatBusy) {
+    // 已有请求在途：保持现状
+    if (!lastSectors) return;
+    data = lastSectors; metaTxt = nowHMS();
+  } else {
+    heatBusy = true;
+    let got = null;
+    try { got = await pickSectors(); } finally { heatBusy = false; }
+    if (got) {
+      lastSectors = got; lastSectorTs = Date.now();
+      data = got; metaTxt = nowHMS();
+    } else if (lastSectors) {
+      // 本次失败但有历史真实数据 → 沿用，不退演示、不报错
+      data = lastSectors;
+      metaTxt = '沿用 ' + new Date(lastSectorTs).toTimeString().slice(0, 8);
+    } else {
+      // 从未成功过 → 才回退演示
+      data = heat; real = false;
+      metaTxt = sectorErr ? '演示·' + sectorErr : '演示数据';
+    }
+  }
+
   grid.innerHTML = data.map(h =>
     `<div class="heat-cell"><span class="h-name">${h.name}</span><span class="h-chg">${h.chg}</span></div>`
   ).join('');
@@ -156,8 +188,7 @@ export async function renderHeat() {
     const chg = cell.querySelector('.h-chg');
     if (chg) chg.style.color = c.fg;
   });
-  const meta = document.getElementById('heatMeta');
-  if (meta) meta.textContent = real ? nowHMS() : (sectorErr ? '演示·' + sectorErr : '演示数据');
+  if (meta) { meta.textContent = metaTxt; meta.title = real ? '' : '演示数据（接口暂未成功）'; }
 }
 
 // 点击情绪表盘 → 翻面看"为什么是这个档位"

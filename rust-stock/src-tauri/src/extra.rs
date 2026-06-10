@@ -77,6 +77,28 @@ fn em_client() -> reqwest::Client {
         .unwrap_or_else(|_| reqwest::Client::new())
 }
 
+// 东财 GET（带重试）：rustls 下东财偶发 "peer closed connection without
+// sending tls close_notify" / 连接重置，多为瞬时，重试 3 次基本可恢复。
+#[cfg(feature = "net")]
+async fn em_get_text(url: &str, referer: &str) -> Result<String, String> {
+    let mut last = "未知错误".to_string();
+    for attempt in 0u32..3 {
+        match em_client().get(url).header("Referer", referer).send().await {
+            Ok(resp) => match resp.text().await {
+                Ok(t) if !t.trim().is_empty() => return Ok(t),
+                Ok(_) => last = "响应为空".into(),
+                Err(e) => last = root_cause(&e),
+            },
+            Err(e) => last = root_cause(&e),
+        }
+        // 退避 150ms / 350ms（最后一次失败不再 sleep）
+        if attempt < 2 {
+            tokio::time::sleep(std::time::Duration::from_millis(150 + attempt as u64 * 200)).await;
+        }
+    }
+    Err(last)
+}
+
 #[cfg(feature = "net")]
 pub async fn fetch_sectors() -> Result<Vec<Sector>, String> {
     // clist 板块列表接口在 rustls 下报 close_notify；改用 ulist.np（与资金流同接口，正常）
@@ -85,13 +107,9 @@ pub async fn fetch_sectors() -> Result<Vec<Sector>, String> {
     let url = format!(
         "https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&invt=2&secids={secids}&fields=f2,f3,f12,f14"
     );
-    let resp = em_client()
-        .get(&url)
-        .header("Referer", "https://quote.eastmoney.com/")
-        .send()
+    let text = em_get_text(&url, "https://quote.eastmoney.com/")
         .await
-        .map_err(|e| format!("板块请求失败: {}", root_cause(&e)))?;
-    let text = resp.text().await.map_err(|e| format!("板块读取失败: {}", root_cause(&e)))?;
+        .map_err(|e| format!("板块请求失败: {e}"))?;
     let mut list = parse_sectors(&text);
     if list.is_empty() {
         return Err("板块解析为空".into());
@@ -158,13 +176,9 @@ pub async fn fetch_fund_flow(code: &str) -> Result<FundFlow, String> {
         "https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&invt=2&secids={secid}\
          &fields=f8,f12,f14,f62,f184,f66,f69,f72,f75,f78,f81,f84,f87"
     );
-    let resp = reqwest::Client::new()
-        .get(&url)
-        .header("Referer", "https://quote.eastmoney.com/")
-        .send()
+    let text = em_get_text(&url, "https://quote.eastmoney.com/")
         .await
         .map_err(|e| format!("资金流请求失败: {e}"))?;
-    let text = resp.text().await.map_err(|e| e.to_string())?;
     parse_fund_flow(&text).ok_or_else(|| "资金流解析为空".into())
 }
 
