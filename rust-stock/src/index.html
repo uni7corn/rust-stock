@@ -144,6 +144,17 @@
     animation: scroll 26s linear infinite;
   }
   .ticker:hover .ticker-track { animation-play-state: paused; }
+  /* 非交易时段醒目红条：暂未开盘 / 休市，沿用上一交易日数据 */
+  .mkt-banner {
+    display: none; flex-shrink: 0; text-align: center;
+    font-size: 11.5px; font-weight: 700; letter-spacing: .2px; color: #fff;
+    background: linear-gradient(90deg, #c0392b, #e04b3a);
+    padding: 4px 10px; line-height: 1.3;
+    border-bottom: 1px solid rgba(0,0,0,.25);
+    animation: mktPulse 2.4s ease-in-out infinite;
+  }
+  .mkt-banner.show { display: block; }
+  @keyframes mktPulse { 0%,100% { opacity: 1; } 50% { opacity: .82; } }
   @keyframes scroll { to { transform: translateX(-50%); } }
   .tk { display: inline-flex; align-items: baseline; gap: 6px; font-size: 11px; }
   .tk .name { color: var(--txt-2); }
@@ -659,6 +670,8 @@
     <div class="ticker">
       <div class="ticker-track" id="tickerTrack"></div>
     </div>
+    <!-- 非交易时段提示（红条；JS 控制显示） -->
+    <div class="mkt-banner" id="mktBanner"></div>
 
     <!-- 主体 -->
     <div class="body" id="body">

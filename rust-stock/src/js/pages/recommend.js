@@ -17,6 +17,17 @@ const mockRecs = [
 let pending = false;
 let recPrices = {}; // code -> {price,change_pct} 实时行情(独立于候选池)
 
+// 近6日收盘价折线是否下行（线性回归斜率<0 视为下行 → 剔除）
+function is6dDown(candles) {
+  const closes = (candles || []).map(c => c.close).filter(x => typeof x === 'number').slice(-6);
+  if (closes.length < 2) return false;
+  const n = closes.length; let sx = 0, sy = 0, sxy = 0, sxx = 0;
+  closes.forEach((y, x) => { sx += x; sy += y; sxy += x * y; sxx += x * x; });
+  const denom = n * sxx - sx * sx;
+  if (!denom) return false;
+  return (n * sxy - sx * sy) / denom < 0;
+}
+
 // 连续推荐天数：从最近的推荐日往前数，必须每个推荐日都包含该股
 function streakOf(code) {
   const days = Object.keys(state.recHistory).sort().reverse(); // 新→旧
@@ -109,7 +120,16 @@ export function renderRecommend(skipFill) {
     return;
   }
 
+  // 近6日收盘价折线下行 → 剔除（需已缓存日K才能判断；未缓存先全展示，拉到K线后复筛）
+  const hidden = new Set(recs.filter(r => sparkCache[r.code] && is6dDown(sparkCache[r.code])).map(r => r.code));
+  if (recs.length && hidden.size === recs.length) {
+    list.innerHTML = '<div class="rec-empty">今日候选近6日收盘价折线均下行，已按规则全部剔除</div>';
+    note.textContent = '';
+    return;
+  }
+
   list.innerHTML = recs.map((r, i) => {
+    if (hidden.has(r.code)) return '';
     const streak = inTauri ? streakOf(r.code) : (i === 0 ? 8 : 1); // 预览演示星标
     const starred = streak >= 7;
     const up = r.score >= 0;
@@ -133,9 +153,9 @@ export function renderRecommend(skipFill) {
       <button class="rec-add${inWl ? ' added' : ''}" data-add="${i}" title="${inWl ? '已在自选' : '一键加入自选'}">${inWl ? '✓' : '＋'}</button>
     </div>`;
   }).join('');
-  note.innerHTML = '右侧缩略图＝<span class="spark-label">近30日收盘价折线</span>（真实日K收盘价连线，点击看完整日K）。本地筛全市场候选池(涨幅/主力净流入/龙虎榜) → AI 用供应链瓶颈+多流派(价值/成长/游资/技术/宏观)+龙虎榜深度分析。★=连续≥7推荐日同股。仅供参考，不构成投资建议。';
+  note.innerHTML = '右侧缩略图＝<span class="spark-label">近30日收盘价折线</span>（真实日K收盘价连线，点击看完整日K）。本地筛全市场候选池(涨幅/主力净流入/龙虎榜) → AI 用供应链瓶颈+多流派(价值/成长/游资/技术/宏观)+龙虎榜深度分析。近6日收盘价折线下行者已自动剔除。★=连续≥7推荐日同股。仅供参考，不构成投资建议。';
   drawSparks(recs);
-  if (!skipFill && inTauri) fillRecPrices(recs);
+  if (!skipFill && inTauri) { fillRecPrices(recs); ensureSparkData(recs); }
 }
 
 // 给每支推荐拉真实实时行情，显示现价（独立于会失败的候选池）
@@ -150,20 +170,29 @@ async function fillRecPrices(recs) {
 
 // ---------- 每支推荐的真实近30日「收盘价折线」缩略图（点击进完整日K）----------
 const sparkCache = {}; // code -> 真实日K数组（会话内缓存，仅取收盘价连线）
-async function drawSparks(recs) {
+// 仅从缓存绘制可见行的缩略图（不发请求）
+function drawSparks(recs) {
   for (let i = 0; i < recs.length; i++) {
     const cv = document.querySelector(`canvas.rec-spark[data-spark="${i}"]`);
     if (!cv) continue;
-    const code = recs[i].code;
-    let candles = sparkCache[code];
-    if (!candles) {
-      const k = await fetchKline(code, 'day', 30); // 真实日K，取近 30 个交易日收盘价
-      if (!k || !k.length) continue;
-      candles = k;
-      sparkCache[code] = candles;
-    }
-    drawSpark(cv, candles);
+    const candles = sparkCache[recs[i].code];
+    if (candles) drawSpark(cv, candles);
   }
+}
+// 拉齐所有推荐的近30日日K（无论是否显示，用于近6日下行复筛），完成后复渲染
+let sparkLoading = false;
+async function ensureSparkData(recs) {
+  if (sparkLoading) return;
+  const todo = recs.filter(r => !sparkCache[r.code]);
+  if (!todo.length) return;
+  sparkLoading = true;
+  try {
+    for (const r of todo) {
+      const k = await fetchKline(r.code, 'day', 30);
+      if (k && k.length) sparkCache[r.code] = k;
+    }
+  } finally { sparkLoading = false; }
+  renderRecommend(true); // 缓存齐 → 复筛 + 画线
 }
 // 近 30 日「收盘价折线」（真实日K的收盘价连线，红涨绿跌）。点击进完整日K。
 function drawSpark(cv, candles) {

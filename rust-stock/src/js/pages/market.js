@@ -36,6 +36,32 @@ function heatColor(v) {
   return { bg: `rgba(20,200,125,${a})`, fg: '#7ee3b4', border: `rgba(20,200,125,${bd})` };
 }
 
+// ---------- A股交易时段判断 + 非交易时段红条 ----------
+// 交易日 周一~周五；时段 09:30-11:30 / 13:00-15:00（不含法定节假日日历）
+export function marketStatus(d = new Date()) {
+  const day = d.getDay();
+  if (day === 0 || day === 6) return { open: false, kind: 'weekend' };
+  const m = d.getHours() * 60 + d.getMinutes();
+  if (m < 9 * 60 + 30) return { open: false, kind: 'pre' };
+  if (m < 11 * 60 + 30) return { open: true, kind: 'open' };
+  if (m < 13 * 60) return { open: false, kind: 'lunch' };
+  if (m < 15 * 60) return { open: true, kind: 'open' };
+  return { open: false, kind: 'closed' };
+}
+const MKT_TXT = {
+  pre: '🔴 A股暂未开盘 · 资金流向 / 板块热力等沿用上一交易日数据',
+  weekend: '🔴 A股休市 · 资金流向 / 板块热力等沿用上一交易日数据',
+  lunch: '🟠 午间休市（11:30–13:00）· 数据暂停更新',
+  closed: '🔴 A股已收盘 · 当前为今日收盘数据',
+};
+export function updateMktBanner() {
+  const el = document.getElementById('mktBanner');
+  if (!el) return;
+  const s = marketStatus();
+  if (s.open) { el.classList.remove('show'); el.textContent = ''; }
+  else { el.textContent = MKT_TXT[s.kind] || ''; el.classList.add('show'); }
+}
+
 export async function renderTicker() {
   let data = null;
   const quotes = await fetchQuotes(INDEX_CODES);
@@ -56,6 +82,7 @@ export async function renderTicker() {
       <span class="chg ${i.up ? 'up-c' : 'down-c'}">${i.chg}</span>
     </span>`).join('');
   track.innerHTML = make() + make(); // 复制一份用于无缝滚动
+  updateMktBanner();
 }
 
 let lastSentiment = null;
@@ -265,4 +292,6 @@ export function initMarket() {
     document.getElementById('sentFlip').classList.remove('flipped');
   });
   if (!inTauri) console.log('[preview] 浏览器预览模式，行情/情绪走 mock');
+  updateMktBanner();
+  setInterval(updateMktBanner, 30000); // 每 30s 复核交易时段
 }
