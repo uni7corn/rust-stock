@@ -2,6 +2,7 @@
 import { fetchNews } from '../api.js';
 import { nowHMS } from '../ui.js';
 import { invoke, inTauri } from '../bridge.js';
+import { scoreNews } from '../sentiment.js';
 
 const mockNews = [
   { time: '11:33', txt: '日本重启的老旧核电站再出故障', url: '', tags: [['期货市场情报','neutral'],['核电','bear']] },
@@ -27,16 +28,21 @@ export async function loadNews() {
 export function renderFeed(targetId = 'feed') {
   const el = document.getElementById(targetId);
   const list = targetId === 'feed' ? newsData.slice(0, 5) : newsData;
-  el.innerHTML = list.map((n, i) => `
+  el.innerHTML = list.map((n, i) => {
+    const sen = scoreNews(n.txt); // 本地词典打分，零成本不耗 AI token
+    const senTag = sen.label === 'bull' ? '<span class="tag bull" title="本地词典：利好">利好</span>'
+      : sen.label === 'bear' ? '<span class="tag bear" title="本地词典：利空">利空</span>' : '';
+    return `
     <div class="feed-item${n.url ? ' has-link' : ''}" data-i="${i}" title="${n.url ? '点击看原文' : ''}">
       <span class="feed-time">${n.time}</span>
       <div class="feed-body">
         <div class="feed-txt">${n.txt}</div>
         <div class="feed-tags">
-          ${n.tags.map(t => `<span class="tag ${t[1]}">${t[0]}</span>`).join('')}
+          ${senTag}${n.tags.map(t => `<span class="tag ${t[1]}">${t[0]}</span>`).join('')}
         </div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   if (targetId === 'feedFull') {
     document.getElementById('newsMeta').textContent = nowHMS();
   }

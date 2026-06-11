@@ -8,3 +8,7 @@ Copyright (c) Im-Midi
    - 筹码分布近似算法（换手率衰减 + 高斯核成本中枢分摊）移植自其
      backend/data/chip_distribution.go，见 rust-stock/src/js/chip.js。
    Apache-2.0 许可证全文见 http://www.apache.org/licenses/LICENSE-2.0
+
+2. ArvinLovegood/go-stock (Apache License 2.0) — 本地情绪词典打分
+   参考其 backend/.../stock_sentiment_analysis.go 的「关键词加权情绪打分」思路，
+   见 rust-stock/src/js/sentiment.js（词典为自行编写，非逐字复制）。
