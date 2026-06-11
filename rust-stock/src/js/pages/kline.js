@@ -305,8 +305,9 @@ async function loadDetail(code) {
     html += '<div class="sd-grid">' + cells.map(c =>
       `<div class="sd-cell"><div class="k">${c[0]}</div><div class="v ${c[2]}">${c[1]}</div></div>`).join('') + '</div>';
   }
-  // 资金流（红=净流入，绿=净流出；每行带净占比；失败则不显示）
-  if (ff) {
+  // 资金流（红=净流入，绿=净流出；每行带净占比）。腾讯兜底只有换手率、5档全 0 → 隐藏资金流条
+  const hasFlow = ff && [ff.main, ff.super_big, ff.big, ff.mid, ff.small].some(v => Math.abs(Number(v) || 0) > 0);
+  if (hasFlow) {
     const rows = [
       ['主力净流入', ff.main, ff.main_pct],
       ['超大单', ff.super_big, ff.super_big_pct],

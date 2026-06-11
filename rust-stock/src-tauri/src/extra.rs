@@ -176,10 +176,47 @@ pub async fn fetch_fund_flow(code: &str) -> Result<FundFlow, String> {
         "https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&invt=2&secids={secid}\
          &fields=f8,f12,f14,f62,f184,f66,f69,f72,f75,f78,f81,f84,f87"
     );
-    let text = em_get_text(&url, "https://quote.eastmoney.com/")
-        .await
-        .map_err(|e| format!("资金流请求失败: {e}"))?;
-    parse_fund_flow(&text).ok_or_else(|| "资金流解析为空".into())
+    // 1) 东方财富（5 档资金流 + 换手率，最全）
+    if let Ok(text) = em_get_text(&url, "https://quote.eastmoney.com/").await {
+        if let Some(ff) = parse_fund_flow(&text) {
+            return Ok(ff);
+        }
+    }
+    // 2) 腾讯兜底：只取换手率（5 档资金流腾讯不提供，置 0；至少换手率能显示）
+    if let Some(ff) = fetch_turnover_tencent(code).await {
+        return Ok(ff);
+    }
+    Err("资金流/换手率获取失败（东财与腾讯均未取到）".into())
+}
+
+/// 解析腾讯轻量报价 v_xxx="a~b~..."；索引 38=换手率%（5档资金流腾讯无，置 0）
+fn parse_gtimg_turnover(text: &str, code: &str) -> Option<FundFlow> {
+    let start = text.find('"')? + 1;
+    let end = text.rfind('"')?;
+    if end <= start {
+        return None;
+    }
+    let fields: Vec<&str> = text[start..end].split('~').collect();
+    if fields.len() < 39 {
+        return None;
+    }
+    let turnover = fields.get(38).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
+    let name = fields.get(1).map(|s| s.to_string()).unwrap_or_default();
+    Some(FundFlow {
+        name,
+        code: code.to_string(),
+        main: 0.0, main_pct: 0.0, super_big: 0.0, super_big_pct: 0.0,
+        big: 0.0, big_pct: 0.0, mid: 0.0, mid_pct: 0.0, small: 0.0, small_pct: 0.0,
+        turnover,
+    })
+}
+
+#[cfg(feature = "net")]
+async fn fetch_turnover_tencent(code: &str) -> Option<FundFlow> {
+    let lc = code.to_lowercase();
+    let url = format!("https://qt.gtimg.cn/q={lc}");
+    let text = em_get_text(&url, "https://gu.qq.com/").await.ok()?;
+    parse_gtimg_turnover(&text, code)
 }
 
 #[cfg(test)]
@@ -221,6 +258,19 @@ mod tests {
         assert!((f.turnover - 1.85).abs() < 0.01);
         assert!(parse_fund_flow(r#"{"data":{"diff":[]}}"#).is_none());
         assert!(parse_fund_flow("x").is_none());
+    }
+
+    #[test]
+    fn test_parse_gtimg_turnover() {
+        let mut f: Vec<String> = (0..40).map(|i| i.to_string()).collect();
+        f[1] = "新钢股份".into();
+        f[38] = "0.85".into();
+        let s = format!("v_sh600782=\"{}\";", f.join("~"));
+        let ff = parse_gtimg_turnover(&s, "sh600782").unwrap();
+        assert!((ff.turnover - 0.85).abs() < 1e-9);
+        assert_eq!(ff.code, "sh600782");
+        assert!(ff.main.abs() < 1e-9); // 5档资金流置 0
+        assert!(parse_gtimg_turnover("bad", "x").is_none());
     }
 }
 
