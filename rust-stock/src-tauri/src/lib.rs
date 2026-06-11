@@ -247,6 +247,7 @@ async fn analyze_stock(
     code: String,
     price: f64,
     change_pct: f64,
+    context: Option<String>, // 数据注入层：前端算好的真实数据(筹码/指标/行情)
 ) -> Result<AiAnalysis, String> {
     let cfg = ai::AiConfig::new(key, base_url, model)?;
     let prompt = format!(
@@ -262,10 +263,16 @@ async fn analyze_stock(
          「证伪条件」出现什么情况说明这个判断错了。\
          除给定的现价与涨跌幅外，禁止编造其他具体数字。\"}}"
     );
-    let messages = vec![
+    let mut messages = vec![
         serde_json::json!({ "role": "system", "content": "你是严谨的股票分析助手。只输出 JSON，不输出任何其他文字。分析仅供参考，不构成投资建议。" }),
-        serde_json::json!({ "role": "user", "content": prompt }),
     ];
+    // 数据注入层（伪对话）：把前端算好的真实数据当作"模型已查到的事实"喂入，
+    // 系统提示与分析模板一字不动，只补数据上下文（go-stock 伪对话注入思路）。
+    if let Some(ctx) = context.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        messages.push(serde_json::json!({ "role": "user", "content": format!("请先提供「{name}」({code})当前可用的实时数据") }));
+        messages.push(serde_json::json!({ "role": "assistant", "content": ctx }));
+    }
+    messages.push(serde_json::json!({ "role": "user", "content": format!("{prompt}\n\n【强制规则】必须基于上文提供的实时数据作答，涉及具体数字一律以上文为准；上文未提供的数据不得凭记忆编造，须注明「未获取到」。") }));
     let content = ai::chat_once(&cfg, messages, 0.3).await?;
     let parsed = ai::extract_json(&content)?;
     Ok(AiAnalysis {

@@ -639,6 +639,8 @@
 
   /* K线页 */
   .kline-periods { display: flex; gap: 6px; margin-bottom: 10px; }
+  .ai-read-btn { margin-left: auto; height: 30px; padding: 0 12px; border: 1px solid var(--accent); border-radius: 8px; background: var(--surface-2); color: var(--accent); font-size: 12px; font-family: 'Sora', sans-serif; cursor: pointer; }
+  .ai-read-btn:active { background: var(--surface-3); }
   .kp-btn {
     flex: 1; height: 26px;
     border: 1px solid var(--line); background: var(--surface-2);
@@ -959,6 +961,7 @@
             <button class="kp-btn active" data-p="day">日K</button>
             <button class="kp-btn" data-p="week">周K</button>
             <button class="kp-btn" data-p="month">月K</button>
+            <button class="ai-read-btn" id="klineAi" title="结合筹码/指标/行情让 AI 解读本股">AI 解读</button>
           </div>
           <canvas id="klineCanvas" width="672" height="460"></canvas>
           <div class="kline-info" id="klineInfo"></div>

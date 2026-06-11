@@ -89,8 +89,8 @@ export async function fetchSentiment() {
 function aiArgs() {
   return { key: state.settings.key, baseUrl: state.settings.aiBase, model: state.settings.aiModel };
 }
-export const analyzeStock = (name, code, price, changePct) =>
-  invoke('analyze_stock', { ...aiArgs(), name, code, price, changePct });
+export const analyzeStock = (name, code, price, changePct, context) =>
+  invoke('analyze_stock', { ...aiArgs(), name, code, price, changePct, context: context || null });
 export const explainSentiment = (score, label, detail) =>
   invoke('explain_sentiment', { ...aiArgs(), score, label, detail });
 export const askAi = (question, history, mode) =>

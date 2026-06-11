@@ -1,9 +1,12 @@
 // pages/kline.js — K线图（canvas 蜡烛图 + MA5/MA10 + 成交量）
 // 交互：滚轮缩放（光标锚定）、按住拖动平移、日/周/月切换。自选股点名称进入。
-import { fetchKline, fetchQuotes, fetchFundFlow } from '../api.js';
+import { fetchKline, fetchQuotes, fetchFundFlow, analyzeStock } from '../api.js';
 import { calcChips } from '../chip.js';
 import { indicatorSummary } from '../mytt.js';
 import { switchPage } from '../router.js';
+import { showAnalysis } from './analysis.js';
+import { flashHint } from '../ui.js';
+import { aiReady } from '../store.js';
 import { inTauri, isMobile } from '../bridge.js';
 
 const cur = { code: null, name: '', period: 'day' };
@@ -175,6 +178,42 @@ function drawIndicators() {
     `<span>BOLL 上<b>${f(s.boll.up)}</b> 中<b>${f(s.boll.mid)}</b> 下<b>${f(s.boll.low)}</b></span>`;
 }
 
+// AI 解读：把已算好的筹码/指标/行情作为真实数据注入 analyze_stock（数据注入层）
+let aiBusy = false;
+async function aiAnalyze() {
+  if (!aiReady()) { flashHint('先在设置页接入 AI API Key'); return; }
+  if (!data.length) { flashHint('K线未就绪'); return; }
+  if (aiBusy) { flashHint('AI 正在解读，稍候'); return; }
+  const last = data[data.length - 1];
+  const chg = last.open ? (last.close - last.open) / last.open * 100 : 0;
+  const parts = [];
+  parts.push(`${cur.name}（${cur.code.toUpperCase()}）现价 ${last.close.toFixed(2)}，今日 ${chg >= 0 ? '+' : ''}${chg.toFixed(2)}%`);
+  const chip = calcChips(data, 80);
+  if (chip) parts.push(`筹码分布：获利比例 ${(chip.profitRatio * 100).toFixed(1)}%，平均成本 ${chip.avgCost.toFixed(2)}，成本区间 ${chip.minPrice.toFixed(2)}–${chip.maxPrice.toFixed(2)}`);
+  const ind = indicatorSummary(data);
+  if (ind) {
+    const cz = c => c === 'gold' ? '金叉' : c === 'dead' ? '死叉' : '无交叉';
+    parts.push(`技术指标(通达信口径)：MACD ${cz(ind.macd.cross)}(DIF ${ind.macd.dif.toFixed(2)}/DEA ${ind.macd.dea.toFixed(2)})；KDJ ${cz(ind.kdj.cross)}(K${ind.kdj.k.toFixed(0)}/D${ind.kdj.d.toFixed(0)}/J${ind.kdj.j.toFixed(0)})；RSI6 ${ind.rsi.r6.toFixed(0)}；BOLL 上${ind.boll.up.toFixed(2)}/中${ind.boll.mid.toFixed(2)}/下${ind.boll.low.toFixed(2)}`);
+  }
+  if (data.length >= 20) { const a = data[data.length - 20].close; if (a) parts.push(`近20交易日累计 ${((last.close - a) / a * 100).toFixed(1)}%`); }
+  const context = '截至最新交易日，本股真实数据如下：\n' + parts.join('\n');
+  aiBusy = true;
+  flashHint('AI 解读中…（结合筹码/指标）');
+  try {
+    const res = await analyzeStock(cur.name, cur.code, last.close, chg, context);
+    if (res && typeof res.score === 'number') {
+      showAnalysis({
+        title: `${cur.name} · AI 解读`,
+        score: res.score,
+        text: res.analysis,
+        meta: `${cur.code.toUpperCase()} · 已注入筹码/指标/行情实时数据 · 仅供参考，不构成投资建议`,
+        back: 'kline',
+      });
+    } else { flashHint('AI 未返回有效结果'); }
+  } catch (e) { flashHint('AI 解读失败：' + e); }
+  finally { aiBusy = false; }
+}
+
 // 筹码分布：用全量日K（含换手率/成交额）算分布并绘制
 function drawChip() {
   const panel = document.getElementById('chipPanel');
@@ -302,6 +341,7 @@ export function showKline(code, name) {
 
 export function initKline() {
   document.getElementById('klineBack').addEventListener('click', () => switchPage('watch'));
+  document.getElementById('klineAi').addEventListener('click', aiAnalyze);
   document.querySelectorAll('.kp-btn').forEach(b => b.addEventListener('click', () => {
     document.querySelectorAll('.kp-btn').forEach(x => x.classList.toggle('active', x === b));
     cur.period = b.dataset.p;
