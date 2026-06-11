@@ -80,7 +80,7 @@ fn em_client() -> reqwest::Client {
 // 东财 GET（带重试）：rustls 下东财偶发 "peer closed connection without
 // sending tls close_notify" / 连接重置，多为瞬时，重试 3 次基本可恢复。
 #[cfg(feature = "net")]
-async fn em_get_text(url: &str, referer: &str) -> Result<String, String> {
+pub(crate) async fn em_get_text(url: &str, referer: &str) -> Result<String, String> {
     let mut last = "未知错误".to_string();
     for attempt in 0u32..3 {
         match em_client().get(url).header("Referer", referer).send().await {

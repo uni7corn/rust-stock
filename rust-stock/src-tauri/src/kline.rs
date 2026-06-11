@@ -60,12 +60,10 @@ pub async fn fetch_kline(code: &str, klt: u32, lmt: u32) -> Result<Vec<Candle>, 
          &fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f61\
          &klt={klt}&fqt=1&end=20500101&lmt={lmt}"
     );
-    let resp = reqwest::Client::new()
-        .get(&url)
-        .send()
+    // 复用 extra 的免 gzip + 3 次重试客户端：化解安卓 rustls 对东财的偶发 close_notify
+    let text = crate::extra::em_get_text(&url, "https://quote.eastmoney.com/")
         .await
         .map_err(|e| format!("K线请求失败: {e}"))?;
-    let text = resp.text().await.map_err(|e| e.to_string())?;
     let candles = parse_kline(&text);
     if candles.is_empty() {
         return Err("K线解析为空（代码不存在或接口字段变了）".into());
