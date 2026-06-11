@@ -200,10 +200,10 @@ async function aiAnalyze() {
   aiBusy = true;
   flashHint('AI 解读中…（结合筹码/指标）');
   try {
-    const res = await analyzeStock(cur.name, cur.code, last.close, chg, context);
+    const res = await analyzeStock(cur.name, cur.code, last.close, chg, context, 'technical');
     if (res && typeof res.score === 'number') {
       showAnalysis({
-        title: `${cur.name} · AI 解读`,
+        title: `${cur.name} · 盘面技术解读`,
         score: res.score,
         text: res.analysis,
         meta: `${cur.code.toUpperCase()} · 已注入筹码/指标/行情实时数据 · 仅供参考，不构成投资建议`,

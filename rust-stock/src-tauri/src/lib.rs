@@ -248,9 +248,14 @@ async fn analyze_stock(
     price: f64,
     change_pct: f64,
     context: Option<String>, // 数据注入层：前端算好的真实数据(筹码/指标/行情)
+    mode: Option<String>,    // None/缺省=产业链基本面分析；"technical"=盘面技术解读
 ) -> Result<AiAnalysis, String> {
     let cfg = ai::AiConfig::new(key, base_url, model)?;
-    let prompt = format!(
+    let prompt = if mode.as_deref() == Some("technical") {
+        // 盘面技术解读：聚焦注入的筹码/指标/量价，与自选股的产业链打分区分开
+        format!("结合上文提供的真实数据（筹码分布 / 通达信指标 / 行情），对A股「{name}」（代码 {code}）做一份**盘面技术解读**（不要写产业链/基本面长篇）。严格只输出 JSON：{{\"score\": -100到100的整数（越看多越接近100，越看空越接近-100，中性0）, \"analysis\": \"350~500字，依次覆盖并用「」标出：「筹码结构」平均成本与现价的关系、获利盘/套牢盘的抛压或支撑、成本密集区作为支撑/压力位；「技术信号」MACD/KDJ/RSI/BOLL 的金叉死叉、超买超卖与可能的顶底背离及其含义；「量价与位置」当前处于突破/回踩/震荡中的哪一种，标出关键支撑位与压力位（可用成本区间与 BOLL 上下轨）；「短线研判」综合上述给出方向与力度；「失效信号」跌破或站上哪个价位说明该研判失效。除上文已给的数字外不得编造其他具体数值。\"}}")
+    } else {
+        format!(
         "对A股股票「{name}」（代码 {code}，现价 {price:.2}，今日涨跌 {change_pct:+.2}%——这两个是真实行情数字，可以引用）\
          做详尽的产业链式多空判断。严格只输出 JSON：\
          {{\"score\": -100到100的整数（越看涨越接近100，越看跌越接近-100，中性为0）, \
@@ -262,7 +267,8 @@ async fn analyze_stock(
          「验证指标」未来1~4个季度看哪些财报/公告信号能确认或推翻判断；\
          「证伪条件」出现什么情况说明这个判断错了。\
          除给定的现价与涨跌幅外，禁止编造其他具体数字。\"}}"
-    );
+        )
+    };
     let mut messages = vec![
         serde_json::json!({ "role": "system", "content": "你是严谨的股票分析助手。只输出 JSON，不输出任何其他文字。分析仅供参考，不构成投资建议。" }),
     ];
