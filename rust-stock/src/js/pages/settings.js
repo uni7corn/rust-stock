@@ -75,6 +75,25 @@ export async function initSettings(onSaved) {
     renderGlass();
   });
 
+  // ---- 涨跌报警 ----
+  const alarmPctEl = document.getElementById('alarmPct');
+  if (alarmPctEl) alarmPctEl.value = state.settings.alarmPct || 5;
+  const renderAlarm = () => document.querySelectorAll('#alarmSeg button')
+    .forEach(b => b.classList.toggle('on', b.dataset.alarm === (state.settings.alarm ? 'on' : 'off')));
+  renderAlarm();
+  document.getElementById('alarmSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-alarm]');
+    if (!b) return;
+    saveSettings({ ...state.settings, alarm: b.dataset.alarm === 'on' });
+    renderAlarm();
+    flashHint(state.settings.alarm ? '已开启涨跌报警' : '已关闭涨跌报警');
+  });
+  if (alarmPctEl) alarmPctEl.addEventListener('change', () => {
+    const v = Math.min(20, Math.max(0.5, +alarmPctEl.value || 5));
+    alarmPctEl.value = v;
+    saveSettings({ ...state.settings, alarmPct: v });
+  });
+
   // ---- API Key 折叠 / 一键清除 ----
   const keySet = document.getElementById('keySet');
   const keyEditBox = document.getElementById('keyEditBox');

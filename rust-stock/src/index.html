@@ -890,6 +890,18 @@
             <div class="set-note">磨砂玻璃质感：半透明 + 模糊 + 高光描边 + 浮动药丸 Tab。仿 iOS「液态玻璃」的 WebView 近似实现，夜/日皆适配；极老旧安卓机型会自动降级为不透明底色。</div>
           </div>
           <div class="set-group">
+            <label>涨跌报警</label>
+            <div class="seg" id="alarmSeg">
+              <button type="button" data-alarm="off">关闭</button>
+              <button type="button" data-alarm="on">开启</button>
+            </div>
+            <div class="key-set-row" style="margin-top:8px">
+              <span style="font-size:12px;color:var(--txt-2)">涨跌幅阈值（%）</span>
+              <input class="w-input" id="alarmPct" type="number" min="0.5" max="20" step="0.5" style="width:90px" />
+            </div>
+            <div class="set-note">开启后，自选股当日涨跌幅达到阈值即弹出提醒（仅交易日，每只股 5 分钟内只提醒一次）。纯本地判断，不上传任何数据。</div>
+          </div>
+          <div class="set-group">
             <label>AI API Key（默认 DeepSeek）</label>
             <div id="keySet" style="display:none">
               <div class="key-set-row"><span class="key-ok">✓ 已接入 API Key</span>

@@ -12,3 +12,7 @@ Copyright (c) Im-Midi
 2. ArvinLovegood/go-stock (Apache License 2.0) — 本地情绪词典打分
    参考其 backend/.../stock_sentiment_analysis.go 的「关键词加权情绪打分」思路，
    见 rust-stock/src/js/sentiment.js（词典为自行编写，非逐字复制）。
+
+3. vsme/chinese-days — A股交易日历（节假日/调休数据）
+   交易日判断使用其公开节假日数据（jsDelivr 直链，内置 2025–2026 兜底），
+   见 rust-stock/src/js/tradingcal.js。引入前请确认其仓库 LICENSE。

@@ -11,6 +11,8 @@ import { invoke, isMobile } from './js/bridge.js';
 import { initScale } from './js/ui.js';
 import { initNav, onShow, currentPage } from './js/router.js';
 import { renderTicker, renderSentiment, renderHeat, initMarket, loadWatchNews, renderWatchNews } from './js/pages/market.js';
+import { refreshCalendar } from './js/tradingcal.js';
+import { checkAlarms } from './js/alarm.js';
 import { loadNews, renderFeed, initNews } from './js/pages/news.js';
 import { renderWatch, initWatch } from './js/pages/watch.js';
 import { initChat } from './js/pages/chat.js';
@@ -122,4 +124,7 @@ export function applyTheme() {
   await loadWatchNews();   // 行情页：自选股相关快讯
   renderWatchNews();
   restartTimer();
+  refreshCalendar();                       // 拉最新节假日（best-effort）
+  checkAlarms();                            // 立即查一次报警
+  setInterval(checkAlarms, 60_000);        // 自选股涨跌报警轮询（每 60s）
 })();

@@ -5,6 +5,7 @@ import { storeGet, storeSet } from '../store.js';
 import { nowHMS, flashHint } from '../ui.js';
 import { inTauri, invoke } from '../bridge.js';
 import { currentPage } from '../router.js';
+import { isTradingDay } from '../tradingcal.js';
 
 const mockIndices = [
   { name: '上证指数', val: '4095.45', chg: '-0.81%', up: false },
@@ -39,8 +40,7 @@ function heatColor(v) {
 // ---------- A股交易时段判断 + 非交易时段红条 ----------
 // 交易日 周一~周五；时段 09:30-11:30 / 13:00-15:00（不含法定节假日日历）
 export function marketStatus(d = new Date()) {
-  const day = d.getDay();
-  if (day === 0 || day === 6) return { open: false, kind: 'weekend' };
+  if (!isTradingDay(d)) return { open: false, kind: 'holiday' };
   const m = d.getHours() * 60 + d.getMinutes();
   if (m < 9 * 60 + 30) return { open: false, kind: 'pre' };
   if (m < 11 * 60 + 30) return { open: true, kind: 'open' };
@@ -50,7 +50,7 @@ export function marketStatus(d = new Date()) {
 }
 const MKT_TXT = {
   pre: '🔴 A股暂未开盘 · 资金流向 / 板块热力等沿用上一交易日数据',
-  weekend: '🔴 A股休市 · 资金流向 / 板块热力等沿用上一交易日数据',
+  holiday: '🔴 A股休市（节假日/周末）· 资金流向 / 板块热力等沿用上一交易日数据',
   lunch: '🟠 午间休市（11:30–13:00）· 数据暂停更新',
   closed: '🔴 A股已收盘 · 当前为今日收盘数据',
 };
