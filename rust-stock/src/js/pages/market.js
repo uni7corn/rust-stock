@@ -1,5 +1,6 @@
 // pages/market.js — 行情页：指数滚动条、市场情绪表盘（可翻面）、板块热力
-import { INDEX_CODES, fetchQuotes, fetchSentiment, explainSentiment, fetchStockNews, classifyNews, fetchSectors, fetchNorthFlow } from '../api.js';
+import { INDEX_CODES, fetchQuotes, fetchSentiment, explainSentiment, fetchStockNews, classifyNews, fetchSectors, fetchNorthFlow, fetchHotStocks } from '../api.js';
+import { showKline } from './kline.js';
 import { state, today, aiReady } from '../store.js';
 import { storeGet, storeSet } from '../store.js';
 import { nowHMS, flashHint } from '../ui.js';
@@ -263,6 +264,57 @@ export async function renderNorth() {
   finally { northBusy = false; }
 }
 
+// ---------- 人气榜（同花顺个股热度 Top 10；点击行 → K线）----------
+// 普通 GET 接口、code+name+涨跌幅一次到位（东财人气榜 POST 只回 secid，弃用）。
+// 5 分钟 TTL + last-good：TTL 内复用内存数据 0 请求；失败沿用最近真实数据并
+// 诚实标注时间；从未成功且无缓存 → 整卡隐藏（绝不演示/造假）。
+let lastHot = null;
+let lastHotTs = 0;
+let hotFromDisk = false; // true = 冷启动回填（meta 标「缓存」，且不挡真实拉取）
+let hotBusy = false;
+const HOT_TTL = 5 * 60_000;
+
+function paintHot(list, metaTxt) {
+  const card = document.getElementById('hotCard');
+  const el = document.getElementById('hotList');
+  const meta = document.getElementById('hotMeta');
+  if (!card || !el) return;
+  const rows = list.slice(0, 10);
+  if (!rows.length) return;
+  card.style.display = '';
+  if (meta) meta.textContent = metaTxt;
+  el.innerHTML = rows.map((h, i) => {
+    const up = h.change_pct >= 0;
+    const code6 = h.code.slice(2);
+    return `<div class="hot-row" data-code="${h.code}" data-name="${h.name}">
+      <span class="hr-rank${i < 3 ? ' top' : ''}">${h.rank || i + 1}</span>
+      <span class="hr-name">${h.name}<span class="hr-code">${code6}</span></span>
+      ${h.tag ? `<span class="hr-tag">${h.tag}</span>` : ''}
+      <span class="hr-chg ${up ? 'up-c' : 'down-c'}">${up ? '+' : ''}${h.change_pct.toFixed(2)}%</span>
+    </div>`;
+  }).join('');
+}
+
+export async function renderHot() {
+  if (!inTauri) return; // 人气榜无演示数据：浏览器预览不显示该卡
+  const fresh = Date.now() - lastHotTs < HOT_TTL;
+  if (lastHot && !hotFromDisk && fresh) { paintHot(lastHot, fmtCacheTs(lastHotTs)); return; } // TTL 内复用：标数据实际时刻
+  if (hotBusy) return;
+  hotBusy = true;
+  try {
+    const list = await fetchHotStocks();
+    if (list) {
+      lastHot = list; lastHotTs = Date.now(); hotFromDisk = false;
+      storeSet('hot_cache', { list, ts: lastHotTs }); // 真实榜单落盘（SQLite）
+      paintHot(list, nowHMS());
+    } else if (lastHot) {
+      // 失败 → 沿用最近真实榜单（含冷启动回填），时间诚实标注
+      paintHot(lastHot, (hotFromDisk ? '缓存 ' : '沿用 ') + fmtCacheTs(lastHotTs));
+    }
+    // 从未成功且无缓存 → 保持整卡隐藏
+  } finally { hotBusy = false; }
+}
+
 // ---------- 冷启动回填（SQLite heat_cache / sent_cache）----------
 // main.js 启动时与 hydrateKlineCache 并发调用：上次真实板块/情绪立即上屏并
 // 种入内存 last-good，离线/接口被掐时首屏也是真数据（meta 标「缓存 HH:MM」），
@@ -270,7 +322,9 @@ export async function renderNorth() {
 export async function hydrateMarketCache() {
   if (!inTauri) return; // 浏览器预览走 mock，无需回填
   try {
-    const [hc, sc] = await Promise.all([storeGet('heat_cache', null), storeGet('sent_cache', null)]);
+    const [hc, sc, ht] = await Promise.all([
+      storeGet('heat_cache', null), storeGet('sent_cache', null), storeGet('hot_cache', null),
+    ]);
     if (hc && Array.isArray(hc.data) && hc.data.length && !lastSectors) {
       lastSectors = hc.data; lastSectorTs = hc.ts || 0; sectorsFromDisk = true;
       paintHeat(hc.data, '缓存 ' + fmtCacheTs(lastSectorTs));
@@ -278,6 +332,10 @@ export async function hydrateMarketCache() {
     if (sc && sc.s && typeof sc.s.score === 'number' && !lastSentiment) {
       lastSentiment = sc.s; lastSentTs = sc.ts || 0; sentFromDisk = true;
       paintSentiment(sc.s, '缓存 ' + fmtCacheTs(lastSentTs));
+    }
+    if (ht && Array.isArray(ht.list) && ht.list.length && !lastHot) {
+      lastHot = ht.list; lastHotTs = ht.ts || 0; hotFromDisk = true;
+      paintHot(ht.list, '缓存 ' + fmtCacheTs(lastHotTs));
     }
   } catch (e) { console.warn('行情缓存回填失败:', e); }
 }
@@ -418,6 +476,12 @@ export function initMarket() {
   document.getElementById('feed').addEventListener('click', (e) => {
     const row = e.target.closest('.feed-item');
     if (row && row.dataset.i != null) openWatchNews(+row.dataset.i);
+  });
+  // 人气榜行点击 → 该股K线
+  const hotEl = document.getElementById('hotList');
+  if (hotEl) hotEl.addEventListener('click', (e) => {
+    const row = e.target.closest('.hot-row');
+    if (row && row.dataset.code) showKline(row.dataset.code, row.dataset.name);
   });
   document.getElementById('sentFront').addEventListener('click', openSentWhy);
   document.getElementById('sentBackBtn').addEventListener('click', (e) => {

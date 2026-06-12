@@ -1,6 +1,6 @@
 // pages/kline.js — K线图（canvas 蜡烛图 + MA5/MA10 + 成交量）
 // 交互：滚轮缩放（光标锚定）、按住拖动平移、日/周/月切换。自选股点名称进入。
-import { fetchQuotes, fetchFundFlow, fetchFlowHistory, fetchStockBoards, analyzeStock } from '../api.js';
+import { fetchQuotes, fetchFundFlow, fetchFlowHistory, fetchStockBoards, fetchDividends, fetchShareInfo, analyzeStock } from '../api.js';
 import { getKline } from '../klinecache.js';
 import { calcChips } from '../chip.js';
 import { indicatorSummary } from '../mytt.js';
@@ -12,7 +12,7 @@ import { inTauri, isMobile } from '../bridge.js';
 
 const cur = { code: null, name: '', period: 'day' };
 // 当前股的扩展维度（所属板块/概念 + 近5日主力净流入），loadDetail 填充、aiAnalyze 注入上下文
-const extras = { code: null, boards: null, flows: null };
+const extras = { code: null, boards: null, flows: null, divi: null, share: null };
 let data = [];                      // 全量K线缓存（最多 250 根）
 let view = { start: 0, count: 90 }; // 当前可视窗口
 const FETCH_N = 250;
@@ -245,6 +245,17 @@ async function aiAnalyze() {
     const sum = recent.reduce((a, d) => a + d.main, 0);
     parts.push(`近${recent.length}日主力净流入(日): ${recent.map(d => `${d.date.slice(5)} ${fmtAmt(d.main)}`).join('，')}；合计 ${fmtAmt(sum)}`);
   }
+  if (extras.code === cur.code && extras.share && extras.share.total_shares > 0) {
+    const cap = last.close > 0 ? last.close * extras.share.total_shares : extras.share.total_cap;
+    const peTxt = extras.share.pe ? `，动态市盈率 ${extras.share.pe.toFixed(1)}` : '';
+    parts.push(`总市值约 ${fmtCap(cap)}（总股本 ${fmtShares(extras.share.total_shares)}，流通股 ${fmtShares(extras.share.float_shares)}）${peTxt}`);
+  }
+  if (extras.code === cur.code && extras.divi && extras.divi.length) {
+    const d = extras.divi[0];
+    const when = d.ex_date ? `除权日 ${d.ex_date}` : (d.progress || '待实施');
+    const yld = d.yield_pct > 0.005 ? `，公告时点股息率 ${d.yield_pct.toFixed(2)}%` : '';
+    parts.push(`最近分红: ${d.plan}（${when}${yld}）`);
+  }
   const context = '截至最新交易日，本股真实数据如下：\n' + parts.join('\n');
   aiBusy = true;
   flashHint('AI 解读中…（结合筹码/指标）');
@@ -325,15 +336,52 @@ async function loadBoards(code) {
   return valid ? cached.boards : null; // 拉取失败 → 沿用旧缓存（绝不造假，没有就不显示）
 }
 
+// 市值（元）→ 万亿/亿；股本（股）→ 亿股/万股。全部四舍五入后展示
+function fmtCap(yuan) {
+  if (!(yuan > 0)) return '--';
+  if (yuan >= 1e12) return (yuan / 1e12).toFixed(2) + '万亿';
+  const yi = yuan / 1e8;
+  return (yi >= 100 ? yi.toFixed(0) : yi.toFixed(1)) + '亿';
+}
+function fmtShares(shares) {
+  if (!(shares > 0)) return '--';
+  if (shares >= 1e8) return (shares / 1e8).toFixed(2) + '亿股';
+  return (shares / 1e4).toFixed(0) + '万股';
+}
+
+// 分红历史按日缓存（年度级数据；[] = 该股确实从未分红，也按日缓存，避免反复打接口）
+async function loadDividends(code) {
+  const key = 'divi_' + code;
+  const cached = await storeGet(key, null);
+  const valid = cached && Array.isArray(cached.list);
+  if (valid && cached.date === today()) return cached.list;
+  const fresh = await fetchDividends(code); // [] 合法（从未分红），null 才是失败
+  if (fresh) { storeSet(key, { date: today(), list: fresh }); return fresh; }
+  return valid ? cached.list : null; // 失败 → 沿用旧缓存；没有就不显示（绝不造假）
+}
+
+// 股本/市值按日缓存（股本年内基本不变；市值展示时用最新现价 × 股本 现算保持实时）
+async function loadShareInfo(code) {
+  const key = 'share_' + code;
+  const cached = await storeGet(key, null);
+  const valid = cached && cached.info && cached.info.total_shares > 0;
+  if (valid && cached.date === today()) return cached.info;
+  const fresh = await fetchShareInfo(code);
+  if (fresh && fresh.total_shares > 0) { storeSet(key, { date: today(), info: fresh }); return fresh; }
+  return valid ? cached.info : null;
+}
+
 async function loadDetail(code) {
   const el = document.getElementById('stockDetail');
   el.innerHTML = '';
   // 并行取行情快照 + 资金流（换手率随资金流接口一起来）+ 近5日主力净流入 + 所属板块
-  const [quotes, ff, flows, boards] = await Promise.all([
+  const [quotes, ff, flows, boards, divi, share] = await Promise.all([
     fetchQuotes([code]), fetchFundFlow(code), fetchFlowHistory(code, 5), loadBoards(code),
+    loadDividends(code), loadShareInfo(code),
   ]);
   if (code !== cur.code) return; // 等待期间已切到别的股票，丢弃过期渲染
   extras.code = code; extras.flows = flows; extras.boards = boards;
+  extras.divi = divi; extras.share = share;
   const q = quotes && quotes[0];
   let html = '';
   // 所属板块/概念 chips（行业高亮）
@@ -357,8 +405,29 @@ async function loadDetail(code) {
       ['成交额', q.amount ? (q.amount / 1e8).toFixed(2) + '亿' : '--', ''],
       ['涨跌额', (q.change >= 0 ? '+' : '') + q.change.toFixed(2), chgCls],
     ];
+    // 股本/市值（东财 stock/get，按日缓存）：市值用最新现价 × 股本现算保持实时；
+    // 接口失败且无缓存 → 不补这 6 格（绝不造假）
+    if (share && share.total_shares > 0) {
+      const totalCap = q.price > 0 ? q.price * share.total_shares : share.total_cap;
+      const floatCap = q.price > 0 ? q.price * share.float_shares : share.float_cap;
+      cells.push(
+        ['总市值', fmtCap(totalCap), ''],
+        ['流通市值', fmtCap(floatCap), ''],
+        ['总股本', fmtShares(share.total_shares), ''],
+        ['流通股', fmtShares(share.float_shares), ''],
+        ['市盈(动)', share.pe ? share.pe.toFixed(2) : '--', share.pe < 0 ? 'down-c' : ''],
+        ['市净率', share.pb > 0 ? share.pb.toFixed(2) : '--', ''],
+      );
+    }
     html += '<div class="sd-grid">' + cells.map(c =>
       `<div class="sd-cell"><div class="k">${c[0]}</div><div class="v ${c[2]}">${c[1]}</div></div>`).join('') + '</div>';
+  }
+  // 最近分红（东财分红明细，按日缓存；从未分红或拉取失败都不显示该行）
+  if (divi && divi.length) {
+    const d = divi[0];
+    const when = d.ex_date ? `除权 ${d.ex_date}` : (d.progress || '待实施');
+    const yld = d.yield_pct > 0.005 ? ` · 股息率 ${d.yield_pct.toFixed(2)}%` : '';
+    html += `<div class="sd-divi">最近分红 <b>${d.plan}</b> · ${when}${yld}</div>`;
   }
   // 资金流（红=净流入，绿=净流出；每行带净占比）。腾讯兜底只有换手率、5档全 0 → 隐藏资金流条
   const hasFlow = ff && [ff.main, ff.super_big, ff.big, ff.mid, ff.small].some(v => Math.abs(Number(v) || 0) > 0);

@@ -11,7 +11,7 @@ import { hydrateKlineCache } from './js/klinecache.js';
 import { invoke, isMobile } from './js/bridge.js';
 import { initScale } from './js/ui.js';
 import { initNav, onShow, currentPage } from './js/router.js';
-import { renderTicker, renderSentiment, renderHeat, initMarket, loadWatchNews, renderWatchNews, hydrateMarketCache } from './js/pages/market.js';
+import { renderTicker, renderSentiment, renderHeat, renderHot, initMarket, loadWatchNews, renderWatchNews, hydrateMarketCache } from './js/pages/market.js';
 import { refreshCalendar } from './js/tradingcal.js';
 import { checkAlarms } from './js/alarm.js';
 import { loadNews, renderFeed, initNews } from './js/pages/news.js';
@@ -77,8 +77,8 @@ function restartTimer() {
     tick++;
     const p = currentPage();
     renderTicker();                 // 顶部指数条所有页可见，始终刷新
-    if (p === 'market') { renderSentiment(); renderHeat(); }      // 前台实时
-    else if (tick % 3 === 0) { renderSentiment(); renderHeat(); } // 后台保温
+    if (p === 'market') { renderSentiment(); renderHeat(); renderHot(); }      // 前台实时（人气榜自带 5min TTL）
+    else if (tick % 3 === 0) { renderSentiment(); renderHeat(); renderHot(); } // 后台保温
     if (p === 'watch') renderWatch();                             // 前台实时
     else if (tick % 3 === 1) renderWatch();                       // 后台保温（错 1 拍）
   }, state.settings.interval * 1000);
@@ -107,6 +107,7 @@ function warmOnResume() {
   renderTicker();
   renderSentiment().catch(() => {});
   renderHeat();
+  renderHot().catch(() => {}); // 人气榜（5min TTL 内 0 请求）
   renderWatch(); // 自选行情（单请求，AI 打分按日缓存命中后 0 请求）
   if (currentPage() === 'news') {
     loadNews().then(() => renderFeed('feedFull'));
@@ -163,6 +164,7 @@ export function applyTheme() {
   // 各路自己写缓存并渲染（隐藏页 DOM 照常更新），用户切过去就是现成数据。
   renderTicker();
   renderHeat();
+  renderHot().catch(() => {}); // 人气榜（缓存先行已由 hydrateMarketCache 上屏，这里拉新鲜数据）
   renderRecommend(); // 今日推荐缓存先行：有缓存立即渲染并预热缩略图K线
   renderSentiment().catch(() => {}).then(() => { initRecommend(); renderRecommend(); });
   renderWatch();

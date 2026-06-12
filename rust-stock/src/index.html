@@ -694,6 +694,21 @@
   .north-line.show { display: block; }
   .north-line b { color: var(--txt-2); font-weight: 500; }
 
+  /* K线详情：最近分红一行 */
+  .sd-divi { font-size: 10px; color: var(--txt-3); margin: 2px 2px 8px; font-family: 'DM Mono', monospace; }
+  .sd-divi b { color: var(--txt-2); font-weight: 500; }
+
+  /* 行情页：人气榜 Top 10 */
+  .hot-list { display: flex; flex-direction: column; gap: 2px; }
+  .hot-row { display: flex; align-items: center; gap: 7px; padding: 5px 4px; border-radius: var(--radius-sm); cursor: pointer; }
+  .hot-row:hover, .hot-row:active { background: var(--surface-2); }
+  .hr-rank { width: 18px; text-align: center; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--txt-3); flex: none; }
+  .hr-rank.top { color: #ff7a45; font-weight: 700; }
+  .hr-name { font-size: 12px; color: var(--txt); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .hr-code { font-size: 9.5px; color: var(--txt-3); margin-left: 5px; font-family: 'DM Mono', monospace; }
+  .hr-tag { font-size: 9px; color: var(--warn); background: rgba(245,166,35,.12); padding: 1px 5px; border-radius: 4px; flex: none; max-width: 84px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .hr-chg { margin-left: auto; font-family: 'DM Mono', monospace; font-size: 11.5px; flex: none; }
+
   /* AI 聊天 */
   .chat-log { display: flex; flex-direction: column; gap: 8px; min-height: 120px; }
   .msg {
@@ -834,6 +849,17 @@
           <div class="meta" id="heatMeta">--:--:--</div>
         </div>
         <div class="heat-grid" id="heatGrid"></div>
+      </div>
+
+      <!-- 人气榜（同花顺个股热度小时榜 Top 10；点击行看K线。取不到且无缓存时整卡隐藏） -->
+      <div class="card fade-in" id="hotCard" style="animation-delay:.07s;display:none">
+        <div class="card-head">
+          <div class="bar" style="background:#ff7a45"></div>
+          <h2>🔥 人气榜 Top 10</h2>
+          <div class="meta" id="hotMeta"></div>
+        </div>
+        <div class="hot-list" id="hotList"></div>
+        <div class="set-note">同花顺个股热度（小时榜）· 点击查看K线 · 热度≠推荐，仅供参考</div>
       </div>
 
       <!-- 自选股信息（与自选相关的最新快讯，全量快讯在「快讯」tab） -->

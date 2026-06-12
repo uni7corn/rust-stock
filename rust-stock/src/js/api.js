@@ -91,6 +91,31 @@ export async function fetchNorthFlow() {
   } catch (e) { console.warn('北向资金失败:', e); return null; }
 }
 
+// 同花顺 A 股人气榜（小时榜 Top15，rank/code/name/涨跌幅/人气值/标签；失败 null）
+export async function fetchHotStocks() {
+  if (!inTauri) return null;
+  try {
+    const r = await invoke('fetch_hot_stocks');
+    return (Array.isArray(r) && r.length) ? r : null;
+  } catch (e) { console.warn('人气榜失败:', e); return null; }
+}
+
+// 个股分红历史（最新方案在前）。[] = 确实从未分红（合法结果）；null = 拉取失败
+export async function fetchDividends(code) {
+  if (!inTauri) return null;
+  try {
+    const r = await invoke('fetch_dividends', { code });
+    return Array.isArray(r) ? r : null;
+  } catch (e) { console.warn('分红获取失败:', e); return null; }
+}
+
+// 个股股本/市值快照（总股本/流通股/总市值/流通市值 + 动态PE/PB；失败 null）
+export async function fetchShareInfo(code) {
+  if (!inTauri) return null;
+  try { return await invoke('fetch_share_info', { code }); }
+  catch (e) { console.warn('股本市值失败:', e); return null; }
+}
+
 export async function classifyNews(titles) {
   if (!inTauri) return null;
   try {

@@ -819,3 +819,282 @@ mod dim_tests {
         assert!(parse_north_history("x").is_empty());
     }
 }
+
+// ============================================================
+// 第五批三个 A 股数据维度（接口设计参考 1nchaos/adata 接口字典，Apache-2.0，
+// 未复制其代码；全部接口 2026-06-12 经真实请求复核形状）：
+//   ① 人气榜（同花顺热度榜，普通 GET，code+name+涨跌幅一次到位）
+//   ② 分红历史（东财 datacenter RPT_SHAREBONUS_DET）
+//   ③ 股本/市值（东财 push2 stock/get f84/f85/f116/f117 + f162/f167）
+// ============================================================
+
+#[derive(Debug, Clone, Serialize)]
+pub struct HotStock {
+    pub rank: u32,        // 名次（order）
+    pub code: String,     // 统一格式 sh600105
+    pub name: String,
+    pub change_pct: f64,  // 涨跌幅 %（rise_and_fall）
+    pub hot: f64,         // 人气值（rate，字符串数值）
+    pub tag: String,      // 人气标签（如"3天2板"），无则取首个概念名
+}
+
+/// 解析同花顺热度榜（2026-06-12 实测）：
+/// data.stock_list[] = {"market":17|33,"code":"600105","name":"永鼎股份",
+///   "rate":"884418.0","rise_and_fall":9.9885,"order":1,
+///   "tag":{"concept_tag":["共封装光学(CPO)"],"popularity_tag":"3天2板"}}
+/// market：17=沪 33=深；其余（北交所等）丢弃，与全 app 仅支持 sh/sz 口径一致。
+pub fn parse_hot_stocks(body: &str) -> Vec<HotStock> {
+    let v: serde_json::Value = match serde_json::from_str(body) {
+        Ok(v) => v,
+        Err(_) => return vec![],
+    };
+    let arr = match v["data"]["stock_list"].as_array() {
+        Some(a) => a,
+        None => return vec![],
+    };
+    arr.iter()
+        .filter_map(|d| {
+            let prefix = match d["market"].as_i64()? {
+                17 => "sh",
+                33 => "sz",
+                _ => return None, // 北交所等
+            };
+            let code6 = d["code"].as_str()?;
+            if code6.len() != 6 {
+                return None;
+            }
+            let name = d["name"].as_str().unwrap_or("").to_string();
+            if name.is_empty() {
+                return None;
+            }
+            let tag = d["tag"]["popularity_tag"]
+                .as_str()
+                .map(|s| s.to_string())
+                .or_else(|| {
+                    d["tag"]["concept_tag"]
+                        .as_array()
+                        .and_then(|a| a.first())
+                        .and_then(|c| c.as_str())
+                        .map(|s| s.to_string())
+                })
+                .unwrap_or_default();
+            Some(HotStock {
+                rank: d["order"].as_u64().unwrap_or(0) as u32,
+                code: format!("{prefix}{code6}"),
+                name,
+                change_pct: num(&d["rise_and_fall"]),
+                hot: num(&d["rate"]),
+                tag,
+            })
+        })
+        .collect()
+}
+
+/// 同花顺 A 股人气榜（小时榜）Top 15。普通 GET、免 Cookie/签名，
+/// 返回即含 code+name+涨跌幅，无需二次行情解析（东财人气榜 POST 只回 secid，弃用）。
+#[cfg(feature = "net")]
+pub async fn fetch_hot_stocks() -> Result<Vec<HotStock>, String> {
+    let url = "https://dq.10jqka.com.cn/fuyao/hot_list_data/out/hot_list/v1/stock?stock_type=a&type=hour&list_type=normal";
+    let text = em_get_text(url, "https://eq.10jqka.com.cn/")
+        .await
+        .map_err(|e| format!("人气榜请求失败: {e}"))?;
+    let mut list = parse_hot_stocks(&text);
+    if list.is_empty() {
+        return Err("人气榜解析为空".into());
+    }
+    list.truncate(15);
+    Ok(list)
+}
+
+// ------------------------------------------------------------
+// 分红历史（东财 datacenter RPT_SHAREBONUS_DET）
+// ------------------------------------------------------------
+#[derive(Debug, Clone, Serialize)]
+pub struct Dividend {
+    pub plan: String,        // 方案文本，如 "10派239.57元" / "10转6.00"（去含税附注）
+    pub ex_date: String,     // 除权除息日 YYYY-MM-DD（未实施为空）
+    pub record_date: String, // 股权登记日 YYYY-MM-DD（可空）
+    pub progress: String,    // 实施分配 / 预案 …
+    pub yield_pct: f64,      // 股息率 %（公告时点 DIVIDENT_RATIO×100；未披露为 0）
+    pub report_date: String, // 对应报告期 YYYY-MM-DD
+}
+
+/// 解析东财分红明细（2026-06-12 实测）：result.data[]，关键字段
+/// IMPL_PLAN_PROFILE("10派239.57元(含税,扣税后215.613元)" / "10转6.00")、
+/// EX_DIVIDEND_DATE / EQUITY_RECORD_DATE（"YYYY-MM-DD 00:00:00"，未实施可为 null）、
+/// ASSIGN_PROGRESS、DIVIDENT_RATIO(0.0167=1.67%，纯转股为 null)、REPORT_DATE。
+/// 返回 None=响应无效；Some(vec![])=该股确实无分红记录（result 为 null）。
+pub fn parse_dividends(body: &str) -> Option<Vec<Dividend>> {
+    let v: serde_json::Value = serde_json::from_str(body).ok()?;
+    if v["success"] != serde_json::Value::Bool(true) {
+        return None;
+    }
+    let arr = match v["result"]["data"].as_array() {
+        Some(a) => a,
+        None => return Some(vec![]), // success 但 result=null → 无分红记录
+    };
+    let date10 = |val: &serde_json::Value| -> String {
+        val.as_str().and_then(|s| s.get(..10)).unwrap_or("").to_string()
+    };
+    Some(
+        arr.iter()
+            .filter_map(|d| {
+                let raw = d["IMPL_PLAN_PROFILE"].as_str()?;
+                if raw.is_empty() || raw.contains("不分配") {
+                    return None; // "不分配不转增"等非分红行
+                }
+                let plan = raw.split('(').next().unwrap_or(raw).trim().to_string();
+                Some(Dividend {
+                    plan,
+                    ex_date: date10(&d["EX_DIVIDEND_DATE"]),
+                    record_date: date10(&d["EQUITY_RECORD_DATE"]),
+                    progress: d["ASSIGN_PROGRESS"].as_str().unwrap_or("").to_string(),
+                    yield_pct: num(&d["DIVIDENT_RATIO"]) * 100.0,
+                    report_date: date10(&d["REPORT_DATE"]),
+                })
+            })
+            .collect(),
+    )
+}
+
+/// 个股分红历史（最近 8 期，按预案公告日倒序=最新方案在前）。
+/// Ok(空数组) = 该股确实从未分红（前端隐藏该行，不算失败）。
+#[cfg(feature = "net")]
+pub async fn fetch_dividends(code: &str) -> Result<Vec<Dividend>, String> {
+    let lc = code.to_lowercase();
+    let suffix = if lc.starts_with("sh") && lc.len() == 8 {
+        "SH"
+    } else if lc.starts_with("sz") && lc.len() == 8 {
+        "SZ"
+    } else {
+        return Err(format!("无法识别代码: {code}"));
+    };
+    let six = &lc[2..];
+    let url = format!(
+        "https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_SHAREBONUS_DET\
+         &columns=ALL&filter=(SECUCODE%3D%22{six}.{suffix}%22)&pageNumber=1&pageSize=8\
+         &sortColumns=PLAN_NOTICE_DATE&sortTypes=-1&source=WEB&client=WEB"
+    );
+    let text = em_get_text(&url, "https://data.eastmoney.com/")
+        .await
+        .map_err(|e| format!("分红请求失败: {e}"))?;
+    parse_dividends(&text).ok_or_else(|| "分红响应无效".to_string())
+}
+
+// ------------------------------------------------------------
+// 股本 / 市值（东财 push2 stock/get；fltt=2 → 数值不带 ×100 倍率）
+// ------------------------------------------------------------
+#[derive(Debug, Clone, Serialize)]
+pub struct ShareInfo {
+    pub total_shares: f64, // 总股本（股）f84
+    pub float_shares: f64, // 流通股（股）f85
+    pub total_cap: f64,    // 总市值（元）f116
+    pub float_cap: f64,    // 流通市值（元）f117
+    pub pe: f64,           // 市盈率(动) f162（亏损时可为负/缺省 0）
+    pub pb: f64,           // 市净率 f167
+}
+
+/// 解析东财 push2 stock/get（2026-06-12 实测，fltt=2）：
+/// {"data":{"f43":1291.91,"f57":"600519","f84":1250081601.0,"f85":1250081601.0,
+///   "f116":1614992921147.9102,"f117":1614992921147.9102,"f162":14.82,"f167":5.96}}
+/// f116 == f43×f84、f117 == f43×f85（实测核对）；缺省值 "-" 由 num() 归 0。
+pub fn parse_share_info(body: &str) -> Option<ShareInfo> {
+    let v: serde_json::Value = serde_json::from_str(body).ok()?;
+    let d = v.get("data")?;
+    if !d.is_object() {
+        return None;
+    }
+    let info = ShareInfo {
+        total_shares: num(&d["f84"]),
+        float_shares: num(&d["f85"]),
+        total_cap: num(&d["f116"]),
+        float_cap: num(&d["f117"]),
+        pe: num(&d["f162"]),
+        pb: num(&d["f167"]),
+    };
+    if info.total_shares <= 0.0 && info.total_cap <= 0.0 {
+        return None; // 全空响应不算成功
+    }
+    Some(info)
+}
+
+#[cfg(feature = "net")]
+pub async fn fetch_share_info(code: &str) -> Result<ShareInfo, String> {
+    let secid = crate::sources::to_secid(code).ok_or_else(|| format!("无法识别代码: {code}"))?;
+    // 注意：f84/f85/f116/f117 是 stock/get 的字段口径；ulist/clist 同编号含义不同
+    //（ulist 的 f84 是小单净额），不能合并进 fetch_fund_flow 的请求。
+    let url = format!(
+        "https://push2.eastmoney.com/api/qt/stock/get?secid={secid}\
+         &fields=f84,f85,f116,f117,f162,f167&fltt=2&invt=2"
+    );
+    let text = em_get_text(&url, "https://quote.eastmoney.com/")
+        .await
+        .map_err(|e| format!("股本市值请求失败: {e}"))?;
+    parse_share_info(&text).ok_or_else(|| "股本市值解析为空".to_string())
+}
+
+#[cfg(test)]
+mod dim5_tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_hot_stocks() {
+        // 2026-06-12 实测真实形状（截取：沪、深、北交所各一）
+        let raw = r#"{"status_code":0,"data":{"stock_list":[
+            {"market":17,"code":"600105","rate":"884418.0","rise_and_fall":9.9885,"name":"永鼎股份","hot_rank_chg":0,"tag":{"concept_tag":["共封装光学(CPO)","光纤概念"],"popularity_tag":"3天2板"},"order":1},
+            {"market":33,"code":"002580","rate":"732816.0","rise_and_fall":-10.0290,"name":"圣阳股份","tag":{"concept_tag":["高铁"]},"order":2},
+            {"market":151,"code":"430047","rate":"10.0","rise_and_fall":1.0,"name":"诺思兰德","tag":{},"order":3}
+        ]},"status_msg":"success"}"#;
+        let l = parse_hot_stocks(raw);
+        assert_eq!(l.len(), 2); // 北交所丢弃
+        assert_eq!(l[0].code, "sh600105");
+        assert_eq!(l[0].rank, 1);
+        assert_eq!(l[0].tag, "3天2板"); // popularity_tag 优先
+        assert!((l[0].change_pct - 9.9885).abs() < 1e-4);
+        assert!((l[0].hot - 884418.0).abs() < 0.1); // rate 是字符串数值
+        assert_eq!(l[1].code, "sz002580");
+        assert_eq!(l[1].tag, "高铁"); // 无 popularity_tag → 首个概念
+        assert!(l[1].change_pct < 0.0);
+        assert!(parse_hot_stocks("x").is_empty());
+        assert!(parse_hot_stocks(r#"{"data":{}}"#).is_empty());
+    }
+
+    #[test]
+    fn test_parse_dividends() {
+        // 2026-06-12 实测真实形状（贵州茅台派现 + 奥瑞德纯转股 DIVIDENT_RATIO=null）
+        let raw = r#"{"result":{"data":[
+            {"IMPL_PLAN_PROFILE":"10派239.57元(含税,扣税后215.613元)","EX_DIVIDEND_DATE":"2025-12-19 00:00:00","EQUITY_RECORD_DATE":"2025-12-18 00:00:00","ASSIGN_PROGRESS":"实施分配","DIVIDENT_RATIO":0.016741439553,"REPORT_DATE":"2025-09-30 00:00:00"},
+            {"IMPL_PLAN_PROFILE":"10转6.00","EX_DIVIDEND_DATE":"2017-05-26 00:00:00","EQUITY_RECORD_DATE":"2017-05-25 00:00:00","ASSIGN_PROGRESS":"实施分配","DIVIDENT_RATIO":null,"REPORT_DATE":"2016-12-31 00:00:00"},
+            {"IMPL_PLAN_PROFILE":"不分配不转增","EX_DIVIDEND_DATE":null,"EQUITY_RECORD_DATE":null,"ASSIGN_PROGRESS":"董事会预案","DIVIDENT_RATIO":null,"REPORT_DATE":"2020-12-31 00:00:00"}
+        ],"count":3},"success":true,"message":"ok","code":0}"#;
+        let l = parse_dividends(raw).unwrap();
+        assert_eq!(l.len(), 2); // "不分配"行剔除
+        assert_eq!(l[0].plan, "10派239.57元"); // 含税附注剥离
+        assert_eq!(l[0].ex_date, "2025-12-19");
+        assert_eq!(l[0].record_date, "2025-12-18");
+        assert!((l[0].yield_pct - 1.6741439553).abs() < 1e-6);
+        assert_eq!(l[1].plan, "10转6.00");
+        assert!(l[1].yield_pct.abs() < 1e-9); // null → 0
+        // success 但 result=null → 确实无分红（Some(空)），与解析失败（None）区分
+        assert_eq!(parse_dividends(r#"{"result":null,"success":true}"#).unwrap().len(), 0);
+        assert!(parse_dividends(r#"{"success":false}"#).is_none());
+        assert!(parse_dividends("x").is_none());
+    }
+
+    #[test]
+    fn test_parse_share_info() {
+        // 2026-06-12 实测真实形状（贵州茅台，fltt=2）
+        let raw = r#"{"rc":0,"rt":4,"data":{"f43":1291.91,"f57":"600519","f58":"贵州茅台","f84":1250081601.0,"f85":1250081601.0,"f116":1614992921147.9102,"f117":1614992921147.9102,"f162":14.82,"f167":5.96}}"#;
+        let s = parse_share_info(raw).unwrap();
+        assert!((s.total_shares - 1250081601.0).abs() < 1.0);
+        assert!((s.float_shares - 1250081601.0).abs() < 1.0);
+        assert!((s.total_cap - 1614992921147.91).abs() < 1.0);
+        assert!((s.pe - 14.82).abs() < 0.01);
+        assert!((s.pb - 5.96).abs() < 0.01);
+        // 市值 = 现价 × 股本（口径核对）
+        assert!((s.total_cap - 1291.91 * s.total_shares).abs() / s.total_cap < 1e-6);
+        assert!(parse_share_info(r#"{"data":null}"#).is_none());
+        assert!(parse_share_info(r#"{"data":{"f84":"-","f116":"-"}}"#).is_none());
+        assert!(parse_share_info("x").is_none());
+    }
+}

@@ -117,6 +117,24 @@ async fn fetch_north_flow() -> Result<Vec<extra::NorthDay>, String> {
     extra::fetch_north_flow().await
 }
 
+/// 同花顺 A 股人气榜（小时榜 Top15，普通 GET，code+name+涨跌幅一次到位）
+#[tauri::command]
+async fn fetch_hot_stocks() -> Result<Vec<extra::HotStock>, String> {
+    extra::fetch_hot_stocks().await
+}
+
+/// 个股分红历史（最近 8 期，最新方案在前）。Ok(空数组)=该股从未分红
+#[tauri::command]
+async fn fetch_dividends(code: String) -> Result<Vec<extra::Dividend>, String> {
+    extra::fetch_dividends(&code).await
+}
+
+/// 个股股本/市值快照（总股本/流通股/总市值/流通市值 + 动态市盈率/市净率）
+#[tauri::command]
+async fn fetch_share_info(code: String) -> Result<extra::ShareInfo, String> {
+    extra::fetch_share_info(&code).await
+}
+
 /// 自选股相关快讯（行情页"自选股信息"卡片）
 #[tauri::command]
 async fn fetch_stock_news(codes: Vec<String>) -> Result<Vec<feed::NewsItem>, String> {
@@ -775,6 +793,9 @@ pub fn run() {
             fetch_flow_history,
             fetch_stock_boards,
             fetch_north_flow,
+            fetch_hot_stocks,
+            fetch_dividends,
+            fetch_share_info,
             fetch_sentiment,
             fetch_kline,
             ai_recommend,
